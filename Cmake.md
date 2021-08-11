@@ -55,3 +55,36 @@
   )
   ```
 
+* 添加外部库文件, private：只在target中用到items中的头文件，public：可能在其他文件中用到items中的头文件，system interface：
+
+  ```
+  target_include_directories(<target> [SYSTEM] [AFTER|BEFORE]
+    <INTERFACE|PUBLIC|PRIVATE> [items1...]
+    [<INTERFACE|PUBLIC|PRIVATE> [items2...] ...])
+  ```
+
+* 添加外部库为静态库, 选择使用STATIC 建立静态库， SHARED 建立动态库
+
+  ```
+  add_library(<name> [STATIC | SHARED | MODULE]
+              [EXCLUDE_FROM_ALL]
+              [<source>...])
+  ```
+
+* 使用cmake将变量填写到外部系统文件
+
+  ```
+  configure_file(<input> <output>
+                 [NO_SOURCE_PERMISSIONS | USE_SOURCE_PERMISSIONS |
+                  FILE_PERMISSIONS <permissions>...]
+                 [COPYONLY] [ESCAPE_QUOTES] [@ONLY]
+                 [NEWLINE_STYLE [UNIX|DOS|WIN32|LF|CRLF] ])
+                 
+  ```
+
+  之后可以在头文件中, cmake中的变量会填充到```config_name```
+
+  ```#define <var> @config_name@```
+
+  
+
