@@ -115,9 +115,68 @@ N：叶结点样本权值总和，E：该叶结点与该数据label不同的权�
 
 ##GBDT
 
-GBDT就是由一系列 Decision Tree 组成的加法模型，后续的树都是在减小前面结果的残差
+### 基本原理
+
+GBDT就是由一系列 弱分类器（经常为 Decision Tree） 组成的加法模型，后续的树都是在减小前面结果的残差，用$F_m(x)$ 来表示累积至m层的输出结果。
+
+$F_m(x) = F_{m-1}(x) + \mathop{argmin}\limits_{h \in H}\ Loss(y,\ F_{m-1}(x)+h(x))$
+
+所以实际上每一层tree训练的是上一层的Loss的负梯度，所以整个流程是：
+
+```
+1. Initialize F0(x), Loss(x, y) -> L=Loss(x, y)
+2. Find F0(x)=argmin(Loss(y, F0(x)))
+3. for i in range(m):
+			compute gradients: gi
+			find h(x) = argmin(Loss(Fi(x)-gi))
+			Fi = F0 + a*h(x)
+...
+```
 
 
+
+对于回归来说，经常食用MSE，即$Loss(x, y) = (F_{m}(x)-y)^2$ ，$\frac{\part{L}}{F_m(x)}=2(F_m(x)-y)$，也就是最小化残差。
+
+
+
+### Bias & Variance
+
+CART 本身作为树模型会比较不稳定，数据波动带来影响比较大，也就是方差会比较大。在enemble学习中boosting减小bias，bagging减小variance，作为具体实现的XGBoost，LightGBM都有都具有两种技巧，使用方差大的分类器更容易通过最后的ensemble得倒更稳定的输出。
+
+High Bias是指模型过于简单，loss表现不好，High Variance是指模型过于复杂，以至于容易受到异常数据的干扰，波动大。
+
+对于Bagging来说，假设每个model都是I.I.D.：
+
+​	$E(\frac{\sum_i X_i}{n}) = \sum_i \frac{E(X_i)}{n} = E(X)$
+
+​	$Var(\frac{\sum_i X_i}{n}) = \frac{Var(X)}{n}$ 
+
+对于Boosting来说，模型之间相互依赖，Boosting的目标就是最小化Loss function -> 所以从定义上来说就是在减小bias，而由于模型之间相互关联，对于variance来说没什么帮助
+
+
+
+### 回归和分类
+
+对于回归问题比较简单，只要找到合适的Loss function按照流程走就行了
+
+对于分类问题，可以参考Logistic Regression，每一层输出的结果都经过一层$Sigmoid()$， 即 $p_m = \frac{1}{1-e^{-F_m(x)}}$，这样就可以按照LR的流程定义 $L_m=-\sum ylog(p)+(1-y)log(1-p)$
+
+求导之后下一层的object就是残差$y-p_m$ 
+
+
+
+### 优缺点
+
+优点：
+
+* 预测很快，可以在预测阶段并行运算
+* 在连续稠密的数据特征上表现很好
+* 树模型不需要对数据归一化等处理
+
+缺点：
+
+* 训练过程只能串行，因为每层有依赖
+* 在稀疏数据上由于一次分裂就相当引入很高阶的非线性，效果不佳，不如SVM/NN
 
 
 
@@ -130,4 +189,123 @@ GBDT就是由一系列 Decision Tree 组成的加法模型，后续的树都是�
 ##LightGBM
 
 首先LightGBM是一个boosting框架，基于数模型的学习算法（官网的描述）。。
+
+基本上lightGBM就是GBDT的一个实现，分类器一般都是CART，但他有很多优化点。
+
+
+
+### 一些优化算法
+
+1. 把feature按照直方图来分割
+
+   * CART 在选择特征进行分裂的时候，需要对每个特征的每个中间值进行计算。当数据量特别大的时候，首先需要排序，然后进行循环计算。在LightGBM中首先会对特征分箱做直方图，直接减小存储空间和计算时间。相当于说是以一定的分割精度来换计算资源的提升。但本来CART 就是一个弱模型，不那么精确的分割点不是特别重要。
+
+   * LightGBM和XGBoost一样，在排序的时候只对非零值进行分箱操作。
+
+   * LightGBM 还有一个优化，在做直方图的时候，父结点的直方图理论上来说是两个子结点的和，LightGBM也用了这个关系。在构建直方图的时候还是需要遍历该结点上的所有数据，因此可以先遍历数据少的结点，然后另一个节点直接用父结点与该结点直方图做差来得到。
+
+2. LightGBM把按层生长的限制，拓宽成按叶结点个数来限制生长
+
+   XGBoost在构建CART的时候还是限制树生长的最大层数来防止过拟合，同时这么做也可以在同一层中并行计算。但由于数据分布不一定均匀，结点之间数据量，重要度都不完全相同，这会强行分裂一些本来不用分裂的结点。
+
+   LightGBM的Lead-wise策略，回先从当前所有叶结点中选取增益最大的进行分裂。但也有可能会导致树左右不平衡，出现一些比较深的结构。
+
+3. Gradient-based One-Side Sampling ：单边梯度采样（GOSS）
+
+   GBDT不想Adaboost有数据重要度的计算，因此可以利用每个数据的梯度来作为权重，可以用来采样。GOSS的目的是减少梯度小的数据的采样频率，用梯度比较大的数据来采样。但也不能直接不用小梯度的数据，导致数据分布改变。
+
+   ```
+   GOSS 流程
+   1. 输入 X: training_data, d: iterations, a: 大梯度数据采样百分比, b: 小梯度数据采样百分比
+   	 Initialize Loss function, weak_learner
+   	 
+   select top N |gradient|: a*len(X), random choose data b*len(X)(1-a)
+   for i in range(d):
+   	preds = model.predit(X)
+   	g = loss(preds, y), weight = uniform()
+   	sort(abs(g))
+   	topSet = g[:a/100*len(X)]
+   	randSet = randomChoose(g[a/100*len(X)+1 : g[a/100*len(X)+b/100*len(X)])
+   	
+   	useSet = [topSet, randSet]
+   	weight[randSet] *= (1-a/100)/b
+   	
+   	newModel.fit(L(useSet, -g[useSet], weight))
+   ```
+
+   所以LightGBM越往下训练数据会越来越少
+
+4. Exclusive Feature Bundling, EFB（互斥特征捆绑算法）
+
+   高维的特征可能具有稀疏性，eg：one-hot，可以通过两个特征相乘来捆绑构建直方图，降低特征数量。
+
+   LightGBM把特征结合的问题转化为图的问题，先判断哪些需要绑定，绑定集合使用分箱的结果
+
+   ```
+   Initialize: F: features, K: max conflict counts
+   					  => G: graph : {Vertexs: F, Edges: weight(conflicts)}
+   					  
+   order = sortByDegree(G)
+   bundles = {} , conflictBundles = {}
+   for i in range(order):
+   	needNew = Fasle
+   	for b in bundles:
+   		cnt = countConflict(b, F[i])
+   		if (cnt+len(conflictBundles) < K):
+   			needNew = False
+   			bundles.add(i)
+   			
+   	if needNew:
+   		add b as a new bundle
+   
+   ```
+
+   ``` 
+   # Bundle features
+   
+   F : one bundle of exclusive data
+   
+   suppose A:[lb1, ub1], B:[lb2, ub2]
+   				-> B=>[ub1, ub2-lb2+ub1]
+   ```
+
+   本质上这个算法是用来解决稀疏特征的，但稀疏特征本来就不适合CART，应该做一些处理。个人感觉应该也不会有很多在用他前不处理数据的情况。
+
+
+
+### 工程优化
+
+1. LightGBM直接支持Catagory
+
+   一般来说catagory需要通过编码来作为输入（one-hot / {1,2,3,4….}），尤其在类别多的时候使用one-hot会影响效果。
+
+   LightGBM支持many-vs-many来分割特征。按照类别特征分类的话，最多需要确定$2^k-1$钟情况。LightGBM 基于 Fisher的《On Grouping For Maximum Homogeneity》论文实现了$O(nlog(n))$的时间复杂度。
+
+   对于分类特征的排序：$\frac{G}{H} = \frac{\sum Gradient}{\sum Hessian}$，主要是因为类别排序要先引入一个比较单元，拿一阶导除以二阶导算是梯度变化率的倒数
+
+   
+
+2. 高效并行
+
+   XGBoost的主要思路是并行地在不同的机器上计算不同特征的最优分割点，然后同步取最优。这个方法主要是把数据的不同特征划分到不同机器上，需要频繁通信得到全局的结果。
+
+   LightGBM每台机器都存全部数据，得到方案后在本地划分。（这么牺牲存储空间真的会快很多吗，毕竟结果通信数据量很少）
+
+   
+
+   对于数据的并行来说，最简单的不同机器本地画直方图然后合并，开销为$O(machines*bins*features)$ 
+
+   LightGBM 合并直方图的时候 对于不同feature 也分到不同机器上，再得倒一个global。
+
+   
+
+   LightGBM 会在本地选取TopK的特征，合并的时候只合并选出来的特征。（这种方法在特征很多的时候比较有用）
+
+   
+
+3. 缓存优化
+
+   XGBoost每次选取特征需要计算梯度排序
+
+4. 
 
