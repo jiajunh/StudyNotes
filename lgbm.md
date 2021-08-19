@@ -1,16 +1,8 @@
 [toc]
 
+## 决策树（Decision Tree）
 
-
-
-
-### GBDT
-
-GBDT就是由一系列 Decision Tree 组成的加法模型，后续的树都是在减小前面结果的残差
-
-#### 决策树（Decision Tree）
-
-##### ID3（Iterative Dichotomiser 3）
+###ID3 (Iterative Dichotomiser 3)
 
 ​	信息熵：$H(S)=\Sigma_{x \in X } -p(x) * log_2(p(x))$​， 其中 $X$​ 是数据集 $S$​ 中的不同类。在分类树中，$X$​ 就是不同的类别
 
@@ -23,12 +15,12 @@ GBDT就是由一系列 Decision Tree 组成的加法模型，后续的树都是�
 ​	** ID3 的缺点
 
 	1. 信息增益会趋向于选择类别比较多的属性，特征类别过多不一定有利于分类
- 	2. ID3 只适用于离散数据
- 	3. 不能处理缺失值，不能剪枝
+	2. ID3 只适用于离散数据
+	3. 不能处理缺失值，不能剪枝
 
 
 
-##### C4.5
+### C4.5
 
 ​	由于信息增益的局限性，ID4.5 主要改进的就是选取特征的判断依据。
 
@@ -44,7 +36,7 @@ GBDT就是由一系列 Decision Tree 组成的加法模型，后续的树都是�
 
 
 
-##### CART （Classification and Regression Tree）
+###CART （Classification and Regression Tree）
 
 ​	虽然C4.5 改进了特征的选取方法，但基于熵的计算涉及很多对数计算，在CART中使用了新的Gini指数作为选取标准。
 
@@ -64,7 +56,7 @@ GBDT就是由一系列 Decision Tree 组成的加法模型，后续的树都是�
 
  2. 任意两个值之间作为分割点，可以有n-1种分法
 
- 3. 计算每种情况的Gini系数，并选取最大值
+ 3. 计算每种情况的loss，并选取最小值，$Loss = \sum_i (f(X_i)-g_i)^2)$，其中$g_i$ 为叶结点上的均值，所以实际就是选取分裂以后两边方差和的最小的分裂值
 
  4. 选取最大增益的特征
 
@@ -72,11 +64,11 @@ GBDT就是由一系列 Decision Tree 组成的加法模型，后续的树都是�
 
     使用回归树的时候，最终的结果是对应的Leaf Node的所有结果的均值，因此可以定义Loss Function
 
-    $Loss = \sum_i (f(X_i-g_i)^2)$
+    
 
     
 
-##### 缺失值处理
+###缺失值处理
 
 计算信息增益时，
 
@@ -99,25 +91,43 @@ N：叶结点样本权值总和，E：该叶结点与该数据label不同的权�
 
 使用 $N/E$​ ​来表示，
 
-*其实就是所有叶结点上各个分类的概率取最大值
+* 其实就是所有叶结点上各个分类的概率取最大值
 
 
 
-##### 剪枝
+###剪枝
+
+剪枝是树模型中有效的防止过拟合的方法，最简单的做法就是直接限制树的深度和叶结点的数量。另外，CART模型其实对于偏离散的数据更容易过拟合。因为在切分离散特征的时候，相当于一次性添加了很多非线性的效果。
+
+后剪枝：
+
+​	后剪枝的目的是在测试集上计算loss function，通过剪枝使loss function降低
+
+​	主要是从叶结点开始从下往上，计算如果将跟结点下所有数据合并在一起loss function是否会降低。
+
+​	后剪枝的Loss function添加了regularization项：$\alpha |T|$， 叶结点个数*$\alpha$ 。
+
+​	$L_\alpha(T) = L(T) + \alpha|T|$ ， 剪枝以后的Loss：$L_\alpha(t) = L(t)+\alpha$  => $\alpha_{lim}=\frac{L(t)-L(T)}{|T|-1}$	
 
 
 
 
 
+##GBDT
+
+GBDT就是由一系列 Decision Tree 组成的加法模型，后续的树都是在减小前面结果的残差
 
 
-### XGBoost
+
+
+
+##XGBoost
 
 
 
 
 
-### LightGBM
+##LightGBM
 
 首先LightGBM是一个boosting框架，基于数模型的学习算法（官网的描述）。。
 

@@ -24,9 +24,8 @@
 >
 > 
 >
-> 
 
-
+1. 一开始直接使用 kfold 进行分组，设定num_fold=5，后来按照time_id进行groupkfold，并把stock_id和time_id都添加为feature，并从结果发现得倒（最后的结果，重要性最高的特征是stock_id和time_id）。如果是这样的话，说明模型特别依赖stock_id，从理解上来说，这不利于模型的泛化。
 
 
 
