@@ -196,7 +196,48 @@ High Bias是指模型过于简单，loss表现不好，High Variance是指模型
 
 ### 一些优化算法
 
-1. 把feature按照直方图来分割
+1. 目标函数二阶泰勒展开
+
+   LightGBM和XGBoost一样，不仅仅是一个简单的Loss function，为了防止过拟合，还有一个正则项。
+
+   目标函数为：$OBJ=\sum_i L(F_m(x_i), y_i) + \sum_{j=1}^{m}\Omega(f_j)$ ，前项为Loss function， 后一项是正则项。
+
+   GBDT 本身两棵树之间是计算Loss function的负梯度来作为新一轮的target，这本质上是泰勒展开一阶形式，也可以说是梯度下降：
+
+   $L(y_i, \hat y_{i}^{t-1}+f_t(x_i)) = L(y_i, \hat y_i^{t-1})+g_i f_t(x_i)$
+
+   而XGBoost 和LightGBM 用了二阶导数，
+
+   $Obj_i = \sum_i (L(y_i, \hat y_i^{t-1})+g_if_t(x_i)+\frac{1}{2}h_if_t^2(x_i)+\Omega(f_t)$
+
+   对于优化，每一层树只保留相关项  $=> Obj_i = \sum_i (g_if_t(x_i)+\frac{1}{2}h_if_t^2(x_i)+\Omega(f_t)$
+
+   
+
+   先把正则项展开，LightGBM / XGBoost 定义了正则项：$\Omega(f_t) = \gamma T+\frac{1}{2}\lambda ||\omega||^2$
+
+   其中$T$ 为叶结点的个数，$\omega_i$为每个叶结点的回归值，然后构成一个向量。
+
+   
+
+   把正则项带入之后可以得到：
+
+   $Obj_i = \sum_i (g_i w_j+\frac{1}{2}h_i w_j^2) + \gamma T + \frac{1}{2}\lambda||w||^2 \\=\sum_i (g_i w_j + \frac{1}{2}(\lambda+h_i) w_j^2)+\gamma T$
+
+   $min\ Obj_i = min\ \sum_i (g_i w_j + \frac{1}{2}(\lambda+h_i) w_j^2)+\gamma T \\=>w_j^*=-\frac{2\sum_{i,i\in j} g_i}{\lambda+\sum_{i, i\in j}h_i}$
+
+   即对于每个叶结点来说存在这么一个理论上的最优值，$Obj_i^* = \frac{1}{2}\lambda\sum_j||w_j^*||^2 + \gamma T \\=\sum \frac{2G_j}{\lambda+H_j}+\gamma T$
+
+   所以在计算分裂的时候能直接一点，分裂的时候本质上来说就是找loss function最小值。
+
+   
+
+   * 讲道理这不就是牛顿法和梯度下降的区别吗，本质上海赛矩阵就是二阶导，但一般来说求二阶导会很麻烦，但因为在这里，loss function 一般是mse，求起来就很容易。
+   * 另外，有这么一种形式存在，也就说对于任何存在一阶导和二阶导的loss function都能直接写，应该说留了一定的自由度。
+
+   
+
+2. 把feature按照直方图来分割
 
    * CART 在选择特征进行分裂的时候，需要对每个特征的每个中间值进行计算。当数据量特别大的时候，首先需要排序，然后进行循环计算。在LightGBM中首先会对特征分箱做直方图，直接减小存储空间和计算时间。相当于说是以一定的分割精度来换计算资源的提升。但本来CART 就是一个弱模型，不那么精确的分割点不是特别重要。
 
@@ -204,13 +245,13 @@ High Bias是指模型过于简单，loss表现不好，High Variance是指模型
 
    * LightGBM 还有一个优化，在做直方图的时候，父结点的直方图理论上来说是两个子结点的和，LightGBM也用了这个关系。在构建直方图的时候还是需要遍历该结点上的所有数据，因此可以先遍历数据少的结点，然后另一个节点直接用父结点与该结点直方图做差来得到。
 
-2. LightGBM把按层生长的限制，拓宽成按叶结点个数来限制生长
+3. LightGBM把按层生长的限制，拓宽成按叶结点个数来限制生长
 
    XGBoost在构建CART的时候还是限制树生长的最大层数来防止过拟合，同时这么做也可以在同一层中并行计算。但由于数据分布不一定均匀，结点之间数据量，重要度都不完全相同，这会强行分裂一些本来不用分裂的结点。
 
    LightGBM的Lead-wise策略，回先从当前所有叶结点中选取增益最大的进行分裂。但也有可能会导致树左右不平衡，出现一些比较深的结构。
 
-3. Gradient-based One-Side Sampling ：单边梯度采样（GOSS）
+4. Gradient-based One-Side Sampling ：单边梯度采样（GOSS）
 
    GBDT不想Adaboost有数据重要度的计算，因此可以利用每个数据的梯度来作为权重，可以用来采样。GOSS的目的是减少梯度小的数据的采样频率，用梯度比较大的数据来采样。但也不能直接不用小梯度的数据，导致数据分布改变。
 
@@ -235,7 +276,7 @@ High Bias是指模型过于简单，loss表现不好，High Variance是指模型
 
    所以LightGBM越往下训练数据会越来越少
 
-4. Exclusive Feature Bundling, EFB（互斥特征捆绑算法）
+5. Exclusive Feature Bundling, EFB（互斥特征捆绑算法）
 
    高维的特征可能具有稀疏性，eg：one-hot，可以通过两个特征相乘来捆绑构建直方图，降低特征数量。
 
@@ -305,7 +346,11 @@ High Bias是指模型过于简单，loss表现不好，High Variance是指模型
 
 3. 缓存优化
 
-   XGBoost每次选取特征需要计算梯度排序
+   LightGBM对缓存有优化（还没理解）
 
-4. 
+
+
+### 参数调优
+
+
 
