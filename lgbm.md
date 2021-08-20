@@ -328,6 +328,8 @@ High Bias是指模型过于简单，loss表现不好，High Variance是指模型
 
 2. 高效并行
 
+   LightGBM支持不同的并行方法，feature/data/voting
+
    XGBoost的主要思路是并行地在不同的机器上计算不同特征的最优分割点，然后同步取最优。这个方法主要是把数据的不同特征划分到不同机器上，需要频繁通信得到全局的结果。
 
    LightGBM每台机器都存全部数据，得到方案后在本地划分。（这么牺牲存储空间真的会快很多吗，毕竟结果通信数据量很少）
@@ -352,5 +354,38 @@ High Bias是指模型过于简单，loss表现不好，High Variance是指模型
 
 ### 参数调优
 
+一些关键的参数：
 
+* boosting：gbdt(default)，rf，dart，goss
+
+  rf：random forest
+
+  goss：就是前面提到的根据梯度绝对值来采样的轻量化的gbdt
+
+  dart：Dropouts meet Multiple Additive Regression Trees，基本上来说就是用drop随机丢弃DT
+
+* num_iterations / num_rounds：好几个名字，就是决定树的做多有多少颗，因为每一棵树都在优化loss梯度项，所以相当于NN里面的一个iteration
+
+* num_leaves / max_depth：一般两个都要设置，防止生成深度过深的不均衡的树。
+
+* tree_learner：是分布式中的一些设置，也就是分布式优化中那些并行的优化
+
+  - `serial（default）`, single machine tree learner
+  - `feature`, feature parallel tree learner, aliases: `feature_parallel`
+  - `data`, data parallel tree learner, aliases: `data_parallel`
+  - `voting`, voting parallel tree learner, aliases: `voting_parallel`
+
+* num_threads / n_jobs:  可以设成-1
+
+* device_type：cpu，gpu，cuda
+
+* verbose_eval: 几个iteration做一次validate
+
+* min_sum_hessian_in_leaf：是为了防止leaf的过多分裂
+
+* bagging_fraction / subsample：只选部分数据训练
+
+* feature_fraction: 只选部分特征训练
+
+* early_stopping_round：如果最后**会和没有提升，提前结束
 
