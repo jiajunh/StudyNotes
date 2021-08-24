@@ -1,5 +1,19 @@
 [toc]
 
+```
+<head>
+    <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            tex2jax: {
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+            inlineMath: [['$','$']]
+            }
+        });
+    </script>
+</head>
+```
+
 ## 决策树（Decision Tree）
 
 ###ID3 (Iterative Dichotomiser 3)
@@ -323,6 +337,8 @@ High Bias是指模型过于简单，loss表现不好，High Variance是指模型
    LightGBM支持many-vs-many来分割特征。按照类别特征分类的话，最多需要确定$2^k-1$钟情况。LightGBM 基于 Fisher的《On Grouping For Maximum Homogeneity》论文实现了$O(nlog(n))$的时间复杂度。
 
    对于分类特征的排序：$\frac{G}{H} = \frac{\sum Gradient}{\sum Hessian}$，主要是因为类别排序要先引入一个比较单元，拿一阶导除以二阶导算是梯度变化率的倒数
+
+   （细节还没仔细研究）
 
    
 

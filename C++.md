@@ -199,6 +199,28 @@ C++11 开始支持lambda表达式，即匿名函数。基本语法为：
 
 * 其实最常见的用法就是lambda表达式作为一个函数对象传入别的函数中。
 
+* 每一个lambda表达式都对应不同的函数，所以基本上只能用auto关键字。除非使用std::function
+
+  ```C++
+  template <typename T>
+  void print_type(T obj) {
+  	cout<<typeid(obj).name()<<endl;
+  }
+  
+  print_type([](){});
+  print_type([](){});
+  ```
+
+  哪怕使用上述代码，两个完全相同的lambda表达式，输出的typeid都不完全相同。
+
+  不过如果只是作为一个函数指针来使用，可以如下定义
+
+  ```C++
+  std::function<int(int)> func = [](int a) {return a;};
+  ```
+
+  
+
 
 
 ### Closure（闭包）
