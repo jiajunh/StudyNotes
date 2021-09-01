@@ -162,9 +162,128 @@ $\max\limits_{\alpha, \beta} L(\alpha, \beta) = \max\limits_{\alpha} \ \boldsymb
 
 
 
+当然，在写成这个形式之后，用一般来说用来求解的方法使用Qudratic Programming。这种加上kernel的表达式在各种convex optimization 库里面也都是可以搞定的。最近看了下python的cvxopt库。其实能不能这么做有一个比较好的判断，就是说能不能接受kernel的计算。
+
+
+
+还是这么处理来的清楚，SMO绕死了。
+
+
+
 然后直接 $w = \sum\limits_{i \in S} \alpha_iy_ix_i$
 
 
 
 
 
+
+
+#### 类SGD 解法
+
+不管是线性代数法还是SMO，都是不能处理超大规模数据的，就算SMO，他也是$O(n^2)$ 这很明显在数据量大的时候没法用。所以本质上我觉得SMO和CD很重复，但又不够精简，因为少量数据可能用不到他，大量数据还是得靠SGD。。。在coordinate descent面前SMO的两个参数就显得很愚蠢。
+
+
+
+当然，因为SVM的Loss function是代有限制条件的，所以首先需要对loss function进行变形。
+
+$w = \max\limits_{w} \displaystyle\frac{2}{||w||} \ s.t. \ y_i(w^Tx)>=1$ 
+
+在这个情况下，可以直接用hinge loss来重写一遍，所以本质上largrange，kkt都是为了简化数据使用的方法，在数据量很大的时候，SVM还是一个带有正则项的hinge loss。（这么理解还是比较舒服的）
+
+$Loss = \displaystyle\frac{1}{n} \sum (max(0, 1-y_iw^Tx_i))+ \lambda||w||^2$
+
+因为这个loss并不是光滑的，所以在使用SGD的同时，需要定义subgradient，也就是hinge loss中那个转折点的导数。
+
+使用SGD来做可以处理原始的SVM，但有一个缺点，就是kernel的技巧处理不了。kernel是让SVM拥有非线性的一个很好用的技巧，但计算量很大，普通的SGD也没法变形。
+
+
+
+当然除了这个方法，也有方法能够处理kernel，也就是之前一直提到的Cordinate Descent。Cordinate Descent能做到这一点，主要是他可以以变换以后的dual问题来做Iteration Descent。
+
+kernel是在变换完以后出现的，
+
+$L = \max\limits_{\alpha} \sum \alpha - \displaystyle\frac{1}{2} \sum\limits_i \sum\limits_{j} (a_i a_j y_i y_j x_i^T x_j)$
+
+$0 \leqslant \alpha_i \leqslant \frac{C}{n}$
+
+Coordinate Descent是每一次只更新一个参数，在这里即$\alpha_i$  
+
+
+
+
+
+### SVR
+
+之前都是SVC，也就是SVM的分类形式，其实SVR和SVC的区别只有一个，就是SVR是在最小化点到线的距离，然后他可以把loss function改编成正则项和到两遍的线的距离的和。
+
+$L(w) = \lambda||w||^2 + C\sum (\xi_i^+ + \xi_i^-)$
+
+然后都一样的，不想写了。。。
+
+
+
+
+
+### SVDD(Support Vector Domain Description)
+
+SVDD是一种用SVM的原理来做one class classification的。所谓的one class classification，是指你只有一部分train data数据，但是你想判断test data是否算是一个outlier。最主要的一个应用场景，就是异常值分析。普通的SVM是用来分类的，但one class classification的情况是你可能甚至没有label。因为异常值一般来说频率会很少，因此其实不需要label也能利用soft margin的思路达到outlier的效果。
+
+
+
+SVDD 的思路其实很简单，就是你有输入数据，然后你需要找到一个体积最小的高维球体，来判断test data是否在这个球体中。当然我们需要使用soft margin的思路，因为很多情况下是训练数据中只有一小部分异常值，其他都是正常值，soft margin能在一定程度上直接对这些异常值有一个很大的cost。那么首先写出loss function。
+
+
+
+$L(R,a,\xi) = R^2 + C\sum \xi_i \ \ \ subject \ to \ (x_i-a)^T(x_i-a) \leqslant R^2 + \xi_i \ , \ \ \xi_i \geqslant 0$
+
+这里R就是半径，a是球体中心点，$\xi$ 是soft margin
+
+然后和SVM一样，通过Largrange multiplier 进行变化，然后疯狂求导。。。带入。。。。
+
+$L(R, a, \xi, \alpha, \beta) = R^2 + C\sum \xi_i - \sum \beta_i \xi_i + \sum (\alpha_i (x_i^Tx_i - 2x_i^Ta + a^Ta)-R^2-\xi_i)$
+
+$\displaystyle\frac{\partial L}{\partial R} = 2R-2R\sum\alpha_i = 0 \ \ \ => \sum \alpha_i = 1$
+
+$\displaystyle\frac{\partial L}{\partial a} = \sum \alpha_i(2a-2x_i)=2a-\sum 2\alpha_i x_i = 0 \ \ \ => a = \sum \alpha_i x_i$
+
+$\displaystyle\frac{\partial L}{\partial \xi_i} = C-\beta_i-\alpha_i = 0$
+
+
+
+$L(\alpha) = \sum \alpha_i <x_i,x_i> - \sum\limits_{i} \sum\limits_{j} \alpha_i \alpha_j<x_i, x_j>  \ \ \ \ subject \ to \\ \sum \alpha_i = 1 \\ 0 \leqslant \alpha_i \leqslant C$
+
+ 
+
+因为sklearn中的oneclassSVM 不好用，它并不能用来做test，sklearn底层是用libsvm，他的做法就是转化啊成dual，然后使用SMO。
+
+自己使用convex optimization来写的话，这里可以展开写一写。
+
+
+
+这里在写的时候意识到的主要的一些问题，就是$\alpha _i$ 只有在对应的数据是support vector的时候才会大于零，而需要用到所有的support vector来计算中心点和半径。这在我看来有点影响精度，因为极少数的异常值有可能会离标准数据很远，所以这也就要求了训练数据基本需要有一定程度的挑选，又或者说有个大致的标签。这样训练的时候选取一小部分数据作为support vector，才不会算出很离谱的半径。
+
+
+
+我们在使用qudratic programming的时候有这么一个标准形式：
+
+$min \ \displaystyle\frac{1}{2}x^TQx + P^Tx \\ subject\ to \ \ Ax=b \\ Gx \leqslant h$
+
+在这里把转化成dual之后的L加个负号变成找最小值，这样可以对应每一个变量：
+
+$Q = 2K =K+K^T$
+
+$P=-diag(K)$
+
+$A = \boldsymbol{1}^T$
+
+$b = 1$
+
+$G = \left[ \begin{matrix} -I \\ I \end{matrix} \right]$
+
+$h = \left[ \begin{matrix} 0 \\ C \end{matrix} \right]$
+
+用一些qudratic programming 就可以解出所有的$\alpha _i$ ，然后也可以得到只有一少部分才会是非零值。
+
+在利用上面得到的特性，$a=\sum \alpha _i x_i$ 计算得到中心点坐标。
+
+然后对于任何点来说 $(z-a)^T(z-a) \leqslant R^2$ 都是满足正常值的范围的，之后可以代入距离公式或者自定义的距离kernel 就能分类是否异常值。
