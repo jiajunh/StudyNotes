@@ -14,7 +14,9 @@ tf：term-frequency
 
 
 
-RSV：Retrieval Status Value
+RSV：Retrieval Status Value，算是一个重要的指标
+
+
 
 结果指标：
 
@@ -269,21 +271,128 @@ $p_i=\frac{s}{S+s}, \ \ \  r_i=\frac{n-s}{N+n-2s-S}$
 
 
 
-#####BM25（best match 25）
+#####Okapi BM25（best match 25）
 
-首先有几个概念：
+BIM原来是为短文本设计的，对于现代文本来说，需要同时考虑到文本长度。BM25的目标就是在不引入过多参数的情况下能够修正这个问题。
 
-eliteness（aboutness）：eliteness首先是一个binary，如果说一个document中，这个document在一定程度上在描述一个term，那么说他是elite的。。。（是一个很模糊的概念）。然后term出现的频率取决于eliteness，eliteness取决于relevance。用$E_i$来表示，相当于是一个<term, toc>中的hidden variable。
+其实BM25的主要思路还是很简单的，就是整个query与文档的相关性有三个主要的特征，term的权重，term和document的相关性，term和query的相关性。
+
+* 单词权重，这个主要还是由idf来表达
+
+* term-document：在之前是用tf来表示的，但是在BM25中有一点比较重要的变化，就是tf和相关性肯定不能说是一个线性关系。所以在tf中我们会使用log来表达这种相关性。在BM25中有一个阈值的概念，对于每一个文档，阈值都与文档有关。那么这里就可以引入一些参数，把文本长度的信息也表达进去。从公式上来讲，一般是用这种形式：
+
+  $\displaystyle \frac{(k_1+1) tf_{td}}{k_1 ((1-b) + b\frac{L_b}{L_{avg}})+tf_{td}}$
+
+  这里面$L_d, \ L_{ave}$ 分别是文档的长度和平均长度，$k_1$是一个正值的参数。$b$ 是0-1的一个参数。
+
+  那么这里$k_1$ 主要就是控制词频的参数，$b$ 就是控制文本长度的参数
+
+   
+
+* query-term：这个也同样加一个参数来控制query长度带来的影响
+
+  $\displaystyle \frac{(k_3+1)tf_{tq}}{k3+tf_{tq}}$
 
 
 
-$RSV^{elite} = \sum\limits_{i\in q,tf_i>0} c_i^{elite}(tf_i)$
+$RSV = \sum \displaystyle \frac{N}{df} \displaystyle \frac{(k_1+1) tf_{td}}{k_1 ((1-b) + b\frac{L_b}{L_{avg}})+tf_{td}} \displaystyle \frac{(k_3+1)tf_{tq}}{k3+tf_{tq}}$
 
-$c_i^{elite}(tf_i)=log \displaystyle \frac{p(TF_i=tf_i|R=1)p(TF_i=0|R=0)}{p(TF_i=0|R=1)p(TF_i=tf_i|R=0)}$
 
-用elite来展开
 
-$p(TF_i=tf_i|R)=p(TF_i=tf_i|E_i=elite)p(E_i=elite|R)+p(TF_i=tf_i|E_i!=elite)(1-p(E_i=elite|R))$
+BM25 变形很多，其中一种就是把idf给变了 $\displaystyle\frac{N-df_t+0.5}{df_t+0.5}$ ，但本质上最核心的思路就是加几个控制参数，和文本长度的特征。
+
+
+
+BM25F：主要是针对document分割成几个zone，这其实也是有道理的，一个document可能有很多不同的部分，标题，文本内容，其他非文本内容等。那么有必要对每个部分分配不同的weight，然后求和。。。（都是很容易的思路）
+
+
+
+处理non-text features：
+
+除了header， anchor，title。。。这些特征还可能会有一些不是文本的特征，eg：pagerank
+
+pagerank就是正整数，google对网页的排名算法，是对超链接的分析算法。
+
+这样的话，需要把RSV分两部分考虑，加上一项非文本特征项：
+
+$RSV = \sum c_i(tf_i) + \sum \lambda_iV_i(f_i)$
+
+$V_i(f_i) = log \displaystyle \frac{p(F_i=f_i | R=1)}{p(F_i=f_i | R=0)}$
+
+$\lambda$ 是可调节的系数。
+
+$V_i$ 可以选多种形式，。。。 一般就取 $V_i = log(\lambda_i^{'}+f_i)$
+
+
+
+#### Evaluation
+
+判断搜索结果还是挺重要的。
+
+最重要的：User Needs
+
+User Needs 会被转化为 queries，relevance对应的是user needs 而不是queries
+
+
+
+* Precision：P(Revalant&Chosen | Chosen)
+
+* Recall：P(Received&Chosen | Relevant)
+* accuracy = (tp + tn) / (tp + fp + fn + tn)，accuracy真的对于检索系统来说不是很好，毕竟绝大部分都是不相关的。
+
+这两个标准对于有没有排序都可以用，算是普适的标准了。
+
+
+
+
+
+对于有排序的推荐/搜索，还有一些其他的标准
+
+Binary：
+
+* Precision@K：很魔幻的名字，居然还有个特殊字符。。。它其实就是计算前一部分数据中的relevance
+* Average Precision：average of precision@K
+* Mean Average Precision：不同query的Average Precision 的均值。。。
+
+Beyond Binary：
+
+* Discounted Cumulative Gain (DCG)：有两点假设：越相关的document比边缘相关的要有用的多，不太相关的不太会被检查到。所以从高到底排序应该设立一个衰减系数，一般用$\frac{1}{log(x)}$
+
+  $DCG = Rel_1 + \displaystyle \sum \frac{Rel_i}{log(i)}$
+
+* *Normalized DCG (NDCG)：Normalize DCG at rank n by the DCG value at rank n of the ideal ranking，ideal ranking 就是从高到低relevance 排序。
+
+  DCG最大的问题就是在搜索/排序过程中，结果的数量都不固定，不固定数量的累积和并不能表征不同查询之间的效果。
+
+  $NDCG@N = \frac {DCG@N} {IDCG@N}$
+
+  IDCG@N 是理论上排序以后前N结果的和。
+
+* Mean Reciprocal Rank（MRR）：$MRR = \displaystyle \frac{1}{N} \sum \displaystyle \frac{1}{rank_i}$ 就是对于不同query下，最相关的document的rank的倒数和。很神奇的标准。
+
+
+
+既然已经到这一步了，就顺便吧一些其他的评价标准都整理一下吧：
+
+* F-score：最多的应该是F1 score，$F_1 = \displaystyle \frac{2}{recall^{-1}+precision^{-1}}=\displaystyle \frac{2precision * recall}{precision + recall}$
+
+  $F_\beta = (1+\beta^2) \displaystyle \frac{precision *recall}{\beta^2 precision + recall}$
+
+  F-score 是Precision 和 Recall的调和平均值，
+
+* Precision-Recall curve（PRC）：一般来说都是偏锯齿状的，好的结果应该是都偏上
+
+* Receiver Operating Characteristics（ROC）：$\displaystyle \frac{True Positive Rate}{False Positive Rate} = \displaystyle \frac{Recall}{\frac{FP}{FP+TN}}$ 
+
+  ROC就很有用了，一般来说是从左下到右上，过（0，0）和（1，1）的线。ROC上每一个点都代表了一个的分类器在不同阈值下的结果。
+
+  假设两个类别平均分布，随机选择的话就是接近y=x的直线，效果越好，越接近（0，1）
+
+* Area Under Curve（AUC）：就是ROC下半部分与坐标轴的面积。
+
+
+
+
 
 
 

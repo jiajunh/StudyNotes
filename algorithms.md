@@ -287,3 +287,38 @@ $h = \left[ \begin{matrix} 0 \\ C \end{matrix} \right]$
 在利用上面得到的特性，$a=\sum \alpha _i x_i$ 计算得到中心点坐标。
 
 然后对于任何点来说 $(z-a)^T(z-a) \leqslant R^2$ 都是满足正常值的范围的，之后可以代入距离公式或者自定义的距离kernel 就能分类是否异常值。
+
+
+
+
+
+### Deep SVDD
+
+其实很容易就想到，把传统SVDD加点deep NN。只不过要完成deep，需要重新定义几个东西，第一个就是Loss Function
+
+从SVDD过来的话，Loss function还是很好想的，就是和半径有关，和各个点距离球体的距离有关，还有正则项，在这篇paper里面，soft margin的loss function就是
+
+$L = R^2 + \displaystyle \frac{1}{nC} \sum max(0, ||\phi(x)-c||^2-R^2) + \displaystyle \frac{\lambda}{2} \sum ||W||_F^2$
+
+论文里面还有一项简化，就是在one class的时候假定异常值数量是比较少的，那么可以把优化半径最小的项去掉。
+
+$L = \displaystyle \frac{1}{n} \sum ||\phi (x_i, W)-c||^2 + \displaystyle \frac{\lambda}{2} \sum ||W||_F^2$ 
+
+这个简化了的loss function直接解读的话就是正则项加上到中心点距离和。所以说本质上就是把kernel，dual这个过程直接用网络替代掉了。这也是合理的，kernel存储读取是比较耗时间的，用一个小一点的网络直接计算有一定的优势。
+
+
+
+这里还有几个点
+
+1. 当W全为0的时候，那么中心点直接就出来了。。。。所有的结果都是一样的，因此为了避免W被优化到全是0的情况，需要避免中心点初始化到这个点附近。
+2. 不能存在bias，如果存在偏置项b，当某一层参数W为0时，那么所有x的输出均为一个与b相关的常数(假设为B)。那么后续的层所接受到的特征均为常数，那么网络后续的层的更新策略只需要将B映射到C(球心)即可。总之也是避免W全部优化为0的措施。
+3. 优先选择ReLU，一个单调activate function如果有界，那么如果一个特征全为正/负，到最后可能就一样了。
+
+
+
+这里中心点就成了简单取平均值，在one class中甚至不需要关心R，基本流程就是先pretrain一个autoencoder，中间的hidden state就是中心点向量，然后再固定中心点以后，继续训练encoder网络。。。本身是一个很简单的结构。
+
+
+
+对于需要优化半径的情况，首先把半径初始化为0，在优化的时候，会设定一个outlier的比例，每一个迭代计算把距离排序之后取(1-nu)th quantile，也就是说找到这个百分位上的距离，设定为新的R。
+
