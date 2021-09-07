@@ -562,3 +562,73 @@ word2vec 中虽然说他有两个网络，但一般只取前面那个input=>hidd
 一般来说document vector就是所有term vector取均值，而在计算query-document similarity的时候DESM认为query是用in vector，document用out vector。
 
 个人感觉主要是都用in embedding，更加强调的是词之间的相似（包括语法拼写和语意），而in-out的话就是更加符合上下文连在一起的情况，也就是word2vec的训练目的。
+
+
+
+
+
+
+
+### Learning to Rank
+
+Training data: <query, doc> pairs, $c_i$ relevance ranking
+
+DBDT：略，写过了。。。
+
+
+
+#### RankNet
+
+Assumptions & settings
+
+* $x_i=>f(x_i, w)=s_i$
+* 对于两个document，和一个query，表示两个document哪个更相关，$P_{ij}=P(d_i>d_j)=\displaystyle \frac{1}{1+e^{-\sigma(s_i-s_j)}}$
+* Loss function使用cross entropy：$L=-\bar{P_{ij}} log(P_{ij})-(1-\bar{P_{ij}}) log(1-P_{ij})$
+
+
+
+$L = -2S_{ij} log(\displaystyle \frac{1}{1+e^{-\sigma(s_i-s_j)}}) - (1-S_{ij})log(\displaystyle \frac{e^{-\sigma(s_i-s_j)}}{1+e^{-\sigma(s_i-s_j)}}) \\ =(1-S_{ij})\sigma (s_i-s_j)+2log(1+e^{-\sigma(s_i-s_j)})$
+
+$S_{ij} \in \{0,1,-1\}$
+
+
+
+$\displaystyle \frac{\partial L}{\partial s_i}= \sigma ((1-S_{ij})-\displaystyle \frac{2}{1+e^{-\sigma(s_i-s_j)}})$
+
+$\displaystyle \frac{\partial L}{\partial w}=\sigma ((1-S_{ij})-\displaystyle \frac{2}{1+e^{-\sigma(s_i-s_j)}})(\displaystyle \frac{\partial s_i}{\partial w}-\frac{\partial s_j}{\partial w})=\lambda_{ij}(\frac{\partial s_i}{\partial w}-\frac{\partial s_j}{\partial w})$
+
+
+
+这里可以看出$\lambda_{ij}$ 描述了两个doc之间的desire change，这里还可以定义一个$\lambda_i=\sum\limits_{j\in A}\lambda_{ij}+\sum\limits_{k\in B} \lambda_{ki}$
+
+这就可以直接写成这种形式，分别问和i相关的错误顺序的数量。所以RankNet的lambda就是各种排序错误的梯度的和。。。
+
+
+
+#### From RankNet to LambdaRank
+
+LambdaRank的核心就是在与之前这个$\lambda_{ij}$ 可以通过scale by NDCG相关的参数来优化。他用的就是交换i，j以后NDCG的变化量
+
+$\lambda_{ij} = \displaystyle \frac{-\sigma}{1+e^{-\sigma(s_i-s_j)}}|\Delta NDCG|$
+
+
+
+
+
+####From LambdaRank to LambdaMART
+
+MART可以通过GDBT来训练，所以lambdaMART就是LambdaRank 和 MART的结合。其实也就是一个GBDT的实现了。
+
+<img src="/Users/jiajunh/Library/Application Support/typora-user-images/image-20210907184551997.png" alt="image-20210907184551997" style="zoom:25%;" />
+
+
+
+
+
+### Link Analysis（本质上就是graph）
+
+Link analysis首先就是要构筑一个graph，在这里基本上就是超链接提供的edge
+
+PageRank就是Link Analysis的一个应用。
+
+PageRank Score最简单的想法就是随机开始，随机跳转到相连的网页，长期以后的稳定值就是score。但很多情况就是会走到头。Teleporting，设定一个几率跳转到随机其他网页，其他时候依然random walk，这样走到头以后还能跳出去。
