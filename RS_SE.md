@@ -309,7 +309,7 @@ BM25F：主要是针对document分割成几个zone，这其实也是有道理的
 
 处理non-text features：
 
-除了header， anchor，title。。。这些特征还可能会有一些不是文本的特征，eg：pagerank
+除了header， anchor，title。。。这些特征还可能会有一些不是文本的特征，eg：pagerank, hit rank, doclength, trust rank 等
 
 pagerank就是正整数，google对网页的排名算法，是对超链接的分析算法。
 
@@ -396,5 +396,169 @@ Beyond Binary：
 
 
 
+#### Efficient Ranking
+
+Safe Ranking / Non-safe ranking：选出的top-K是否是严格分最高的K个
+
+对于document数量很多的情况，显然sorting并不是个好方法。并且在选择top-K的时候，计算cosine是bottlenect。
+
+那么在计算的时候只选取一部分document然后在计算cosine。这个选择过程自然可以想到doc中term的idf。
+
+1. 只选取含有idf大的term，这样的话像the， a这种会直接被过滤掉，然后相当大一部分doc会直接被过滤掉。
+2. 只选取doc有很多term，eg 含有3-4个term，这可以在posting index vector中直接取交集。
+3. Champion List：对每个term 事先计算有最高权值的一些doc，把这些称为champion list。这样之后只用处理这一部分doc。
 
 
+
+在ranking的时候，我们是需要both relative & authoritive
+
+relavance 的评价标准就是cosine scores
+
+Authority is typically a query-independent property of a document：eg：有wiki的，有很多citation的paper，pagerank这种
+
+对于authoritive，每一个doc应该都有一个数值来表示，基本会scale到 [0,1]。
+
+所以综合的分数用Net Score来表示：
+
+$net\_score(q,d) = g(d) + cosine(q,d)$
+
+
+
+然后就可以取top-K了，这里当然要fast！！
+
+1. 那么结合上面的一些操作，可以在champion list中按照$g(d)$ 排序，这些都可以离线完成，并且这样可以使posting中出现term的平均时间变短，有效提高效率。当然改进一点就可以用$g(d)+tf-idf$ 来排序。
+2. clustering：选取$\sqrt{N}$ 个cluster 然后聚类。这样的话就相当于每个query，可以直接先找到最相关的doc，在这个cluster中做排序。直接把数据减少到$\frac{1}{\sqrt{n}}$，另外甚至可以多层clustering。
+
+
+
+Tierd Index
+
+既然说到Champion List，champion list就直接把doc分成两类了，一类是high score，另一类是low score。=>分成两个tiers，那么一个拓展的点就是把posting list再按照重要度多分几分，就成了tiered index。整个流程就是只遍历最高分的，除非他没够K个，在依次计算。当然如果在计算的时候数量已经够了，可以直接early stop
+
+
+
+##### Safe Ranking
+
+前面的都是对于non-safe ranking的一些策略，毕竟很多时候只要结果不是很离谱都没太大区别，就不需要safe ranking。
+
+WAND scoring
+
+。。。。。。to be continued
+
+
+
+
+
+
+
+### Text Classification
+
+Naive Bayes， KNN， K-mean。。。LR，Decision Tree，。。。。
+
+Naive Bayes本质就是计数。。。所以来说训练很快，在spamming filter有一席之地
+
+
+
+
+
+### Low dimension vector
+
+前面所有的doc_vector, query_vector其实都不太会应用，因为这些one-hot vector都太大了而且很稀疏，所以基本上nlp最核心的一点就是把这些映射到一个低维向量空间中，这样很多问题就直接解决了。
+
+#### Tranditional Way（Latent Semantic Indexing/Analysis）LSA
+
+先回到原始的问题，我们现在有一个超级大的query-doc矩阵，然后想要找到一个低维的空间。
+
+SVD：先不考虑矩阵过大是否能处理的问题，首先这是一个降维的问题，也就意味着SVD/PCA这种肯定是能想到的。当然PCA只是SVD的特例，一般也都直接SVD
+
+
+
+#### Neural Embedding
+
+然后就到了embedding的时代，那么经典的方法肯定就来了呀，
+
+##### Word2Vec
+
+* CBOW
+* skip-GRAM
+
+Two (moderately efficient) training methods 
+
+1.  Hierarchical softmax 
+2.  Negative sampling 
+3.  Naïve softmax
+
+
+
+所谓的embedding基本上就是几层网络，然后把维度压缩下来，那么这里面首先Loss function要定义好。
+
+对于word2vec来说，基本的方法就是填词，先不说CBOW，一般是skip-gram比较有效。在定了一个窗口大小之后，我们经过网络embedding，然后decode出来的词就是output，那么我们输入中心词，去预测边上的词，根据现有的词库就可以有一个概率分布。
+
+$p(w_{t+m} | w_t)$
+
+那么在整个窗口中的联合概率就又出现连乘的likelihood，然后转化一下就出来了loss function
+
+$max \ \prod\limits_{t}\prod\limits_{i \in [-m,m]} p(w_{t+i}|w_t, \theta)$
+
+$L = - \frac{1}{T} \sum\limits_{t} \sum \limits_{i} log \  p(w_{t+i}|w_t, \theta)$
+
+这计算的时候会用到center word 和 context word，他们都是经过同一个网络embedding得到的。那么条件概率可以通过softmax来表示
+
+$p(o | c) = \displaystyle \frac{exp(u_o^T v_c)}{\sum exp(u^Tv_c)}$
+
+这里我也第一次知道为什么softmax叫softmax，max是因为他取最大值作为分类结果，soft是指小概率事件他依然有一定的值。。。
+
+
+
+另外还有一些很有用常见的验证方法：
+
+1. 拼写相关的验证：比如单复数/不同时态的动词，他们的vector相减应该都接近0
+
+2. 语义相关：通过词义queen-woman=king-man
+
+   
+
+#####Glove（Global Vectors for Word Representation）
+
+SVD利用的是全局的一些共有特征，word2vec用的是局部的特征，Glove同时用了两方的特征。
+
+Glove引入的是一个Co-occurrence Probabilities Matrix
+
+首先有一个word-word matrix，$X_{i,j}$ 指的是在语料库中出现在$word_i$ 上下文中 $word_j$ 的次数，然后就有了概率 $P_{i,j}=\displaystyle\frac{X_{i,j}}{X_i}$
+
+有这两个矩阵引出Co-occurrence Probabilities Matrix
+
+$Ratio=\displaystyle\frac{P_{i,k}}{P_{j,k}}$  有一定的意义和规律，
+
+1. i,k相关，j,k相关 => 1
+2. i,k不相关，j,k不相关 => 1
+3. i,k相关，j,k不相关 => 很大
+4. i,k不相关，j,k相关 => 很小
+
+Glove认为词向量在经过一定的映射关系之后能够呈现这种规律，在向量空间里面相关性直接相减，所以其实也很好表示
+
+$F(w_i, w_j, w_k) = F((w_i-w_j)^T w_k) = \displaystyle\frac{P_{i,k}}{P_{j,k}}$
+
+然后通过exp()联系起来
+
+$P_{i,k} = exp(w_i^T w_k) => w_i^T w_k=log(\displaystyle \frac{X_{i,k}}{X_i})=log(X_{i,k})-log(X_i) = log(X_{i,k}) + b_i + b_k$
+
+这样就有了新的Loss function
+
+$L=\sum(w_i^Tw_k+b_i+b_k - log(X_{ik}))^2$
+
+
+
+所以本质上我觉得他是发现了一种词之间相关性的东西，然后把skip gram 的loss部分重新替换掉了。
+
+
+
+
+
+##### Dual Embedding Space Model (DESM)
+
+word2vec 中虽然说他有两个网络，但一般只取前面那个input=>hidden，后面那个hidden=>output一般只是用来train的。有时候IR中也会需要两个都用，主要是在计算相似度的时候，整场都是用in embedding，DESM说query-doc应该用in-out。
+
+一般来说document vector就是所有term vector取均值，而在计算query-document similarity的时候DESM认为query是用in vector，document用out vector。
+
+个人感觉主要是都用in embedding，更加强调的是词之间的相似（包括语法拼写和语意），而in-out的话就是更加符合上下文连在一起的情况，也就是word2vec的训练目的。

@@ -322,3 +322,37 @@ $L = \displaystyle \frac{1}{n} \sum ||\phi (x_i, W)-c||^2 + \displaystyle \frac{
 
 对于需要优化半径的情况，首先把半径初始化为0，在优化的时候，会设定一个outlier的比例，每一个迭代计算把距离排序之后取(1-nu)th quantile，也就是说找到这个百分位上的距离，设定为新的R。
 
+
+
+
+
+
+
+
+
+
+
+
+
+## Naive Bayes
+
+naive bayes本质上来说应该就是个计数，加上个贝叶斯。。。
+
+当然，它是一个条件概率模型，那些出来可定就是这个形式，然后再假设feature独立，然后把它变成连乘的形式再取log变成连加。
+
+$\displaystyle p(Class \ | \ Features) = \frac{p(Features \ | \ Class)*p(Class)}{p(Features)}$
+
+这个式子中经典的只要关注分子，因为分母在训练数据定了以后是个定值。
+
+然后因为独立性就变成了 $p(Class)*\prod p(F_i \ \ |\ C) $
+
+后面只要求最大的class
+
+$C = \max\limits_{c} p(C)*\prod p(F_i|C)$
+
+$p(C)$ 直接统计算出来，$p(F_i|C)$ 也直接全部统计一遍。。。然后就结束了。
+
+
+
+最简单的NB很容易，纯粹的统计一遍就结束了。
+

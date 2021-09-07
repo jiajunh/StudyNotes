@@ -75,3 +75,58 @@ exkmp,ac自动机,后缀数组,manacher,hash
 
 
 树状数组，线段树，treap，splay
+
+
+
+
+
+
+
+### 一些随机的算法
+
+#### 用rand(7)生成rand(10)
+
+这个算法其实就是先找到一个比10大的随机数，然后不停拒绝比10大的随机数。
+
+比较常见的就是先生成两个rand(7)，把他们相乘，就得到等概率的1-49，然后把大于49的拒绝掉进行while循环。。。
+
+
+
+#### 蓄水池抽样（Random Reservior Sampling）
+
+主要适用于大数据流。从数据流中抽取k个数据点，数据流中共有N个数据点。
+
+对于k=1的时候，第i个数数保留的概率为$\frac{1}{i}$，保留就把之前的书丢掉。
+
+对于k>1，先保留前k个数，对于第k+1个数，以概率$\frac{k}{k+1}$保留。如果被保留，那么对于前k个数中$n_r,r \in 1:k$ 在这一轮被保留的概率为
+
+$p = 1 * (\frac{1}{k+1} + \frac{k}{k+1}*\frac{k-1}{k})=\frac{k}{k+1}$
+
+对于第k+2个数以概率$\frac{k}{k+2}$ 保留，那么$n_r$ 被保留的概率为
+
+$p=\frac{k}{k+1}*(\frac{2}{k+2} + \frac{k}{k+2}*\frac{k-1}{k}) = \frac{k}{k+2}$
+
+
+
+```C++
+vector<int> ReservoirSampling(vector<int>& results, vector<int>& nums, int k)
+{
+    // results.size(): k
+    // nums.size(): N
+    int N = nums.size();
+
+    for (int i=0; i<k; ++i) {
+        results[i] = nums[i];
+    }
+
+    for (int i=k; i<N; ++i) {
+        int random = rand()%i;
+        if (random<k) {
+            results[random] = nums[i];
+        }
+    }
+
+    return results;
+}
+```
+
