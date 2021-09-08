@@ -366,7 +366,7 @@ Beyond Binary：
 
   $NDCG@N = \frac {DCG@N} {IDCG@N}$
 
-  IDCG@N 是理论上排序以后前N结果的和。
+  IDCG@N 是理论上排序以后前N结果的和。这个东西基本应该就是人工标注了。讲道理人工对相关性排序也很难啊。
 
 * Mean Reciprocal Rank（MRR）：$MRR = \displaystyle \frac{1}{N} \sum \displaystyle \frac{1}{rank_i}$ 就是对于不同query下，最相关的document的rank的倒数和。很神奇的标准。
 
@@ -553,6 +553,28 @@ $L=\sum(w_i^Tw_k+b_i+b_k - log(X_{ik}))^2$
 
 
 
+skip-gram 还会有一些采样，根据词出现的频率来采样。
+
+
+
+##### Hierarchical softmax 
+
+主要就是把原来的hidden->output的网络用一种新的haffman tree的softmax来替代了。它是一个二叉树的结构，它每个节点都是一套参数加上一个sigmoid，用来分类，到leaf就对应到了单词。
+
+
+
+##### Negative Sampling
+
+这也是一个提高效率的方法。主要更新的点在于onehot编码的结果只有一个是1，其他全为0。那么求导更新的时候整个vec都要参与求导，她们认为这样太耗计算资源了，所以只随机取所有0中的几个参与更新。。。很暴力。那么负采样的词会按照一个概率来计算，频率越高越容易被选中。
+
+$\displaystyle \frac{f_i^{\frac{3}{4}}}{\sum f_i^{\frac{3}{4}}}$
+
+
+
+
+
+
+
 
 
 ##### Dual Embedding Space Model (DESM)
@@ -569,11 +591,15 @@ word2vec 中虽然说他有两个网络，但一般只取前面那个input=>hidd
 
 
 
+
+
+
+
 ### Learning to Rank
 
 Training data: <query, doc> pairs, $c_i$ relevance ranking
 
-DBDT：略，写过了。。。
+GBDT：略，写过了。。。
 
 
 
@@ -619,7 +645,7 @@ $\lambda_{ij} = \displaystyle \frac{-\sigma}{1+e^{-\sigma(s_i-s_j)}}|\Delta NDCG
 
 MART可以通过GDBT来训练，所以lambdaMART就是LambdaRank 和 MART的结合。其实也就是一个GBDT的实现了。
 
-<img src="/Users/jiajunh/Library/Application Support/typora-user-images/image-20210907184551997.png" alt="image-20210907184551997" style="zoom:25%;" />
+<img src="/Users/jiajunh/Library/Application Support/typora-user-images/image-20210907184551997.png" alt="image-20210907184551997" style="zoom:20%;" />
 
 
 
@@ -629,6 +655,75 @@ MART可以通过GDBT来训练，所以lambdaMART就是LambdaRank 和 MART的结�
 
 Link analysis首先就是要构筑一个graph，在这里基本上就是超链接提供的edge
 
+
+
+#### PageRank
+
 PageRank就是Link Analysis的一个应用。
 
 PageRank Score最简单的想法就是随机开始，随机跳转到相连的网页，长期以后的稳定值就是score。但很多情况就是会走到头。Teleporting，设定一个几率跳转到随机其他网页，其他时候依然random walk，这样走到头以后还能跳出去。
+
+pagerank是一个0-1的数
+
+这么一来就是一个markov chain了，当然如果是平均概率， 那么有更多link指向的page自然会有更多的几率被访问到。并且因为有teleport的机制，就不存在循环周期的markov chain，那么就一定会有一个steady state。
+
+$aP = a $ => a就是left eigen vector
+
+对应下来，pagerank就是每个page steady state的概率值。
+
+但是用解eigen vector的方法来计算显然不现实，page数量肯定是一个很大的数，构建出来的transition matrix就是一个巨大的稀疏矩阵。
+
+
+
+当然，这种最简单的teleport肯定很有局限性，简单的改进就是先把按照topic把page打上tag，这样一来可以按照topic来teleport，毕竟直接跳转到一个随机的不相关的page效果肯定不如相似领域内的page好。在改进一步就是personalize pagerank，但这对于每个用户来说都是不同的。为了能够做到这一点，假设已经有了用户的一些基本信息，那么我们可以先把各个topic的比例都计算出来，然后整体的ss distribution就是各个topic之下的线性和。
+
+
+
+#### **Hubs and Authorities** / Hyperlink-Induced Topic Search (HITS)
+
+这两个东西是两种score，就是原来把一个page只打一个score，先在分成两个hub score 和 authority score。这么做主要是由于在搜索的时候，可以把一个网页认为有两个主要的部分，尤其是*broad-topic searches*。那么经常就是我做这种搜索期望的是由专业人员，专业机构提供的信息，这样的网页就被称为是authoritive。当然也有会把这些信息汇总起来的那种网页，就叫hub page，hub page往往会指向authoritive pages。所以好的authoritive page 往往也是被很多hub pages指向。
+
+初始setting：初始页面$v$，$v->y$
+
+$h(v)=a(v)=1$
+
+$h(v) <= \sum\limits_{v->y} a(y)$
+
+$a(v) <= \sum\limits_{v->y} h(y)$
+
+那么一般这种情况，先把它写成Graph的形式，把Adjanct Matrix写出来。然后就有了
+
+$h <= Aa=AA^Th, \ \ \ a<=A^Th=A^TAa, \ \ \ \ $
+
+这里显然看出来是不可能直接取等号的，不然不停带入就爆掉了。但这个形式就很像是eigen value的形式，所以
+
+$h = \frac{1}{\lambda}AA^Th, \ \ \ a=\frac{1}{\lambda}A^TAa$
+
+
+
+对于一个query，首先找到含有含有term 的所有的pages，这个被称为root set，但这还不够，在加上root set中指向的page和指向root set中page的page构成base set。这么扩大set的原因就是可能query 搜索的是一个比较抽象的词，然后很多非常相关的具体的doc往往并不包含在root set中，但base set把这些也考虑进去了。
+
+从graph的构建角度来说，就相当于base set就是root set往外扩充了一层。把base set作为计算hub /authorities score的基础集合。之后要选出top hub/authorities 只要直接疯狂迭代就行。虽然说正常需要一个特征值来scale，但只选top的话scale无所谓，只是为了防止迭代爆掉。。。然后这就被叫做hits了。。。
+
+
+
+
+
+### **Crawling and near-duplicate pages**
+
+爬虫要爬数据问题还挺多的，首先肯定是必须要分布式，不然效率太低。然后要排查掉恶意网站，和去重，并且不要给一个服务器很大的压力。
+
+<img src="/Users/jiajunh/Library/Application Support/typora-user-images/image-20210908140319041.png" alt="image-20210908140319041" style="zoom:15%;" />
+
+####
+
+因为爬虫需要经常各个网站询问ip地址，DNS肯定不允许非常频繁的询问，那么就需要把ip缓存，以及batch发送。
+
+Parsing: URL normalization：在遍历link的时候需要把link的完整url扩充
+
+Filters and robots.txt：robot.txt是一个爬虫协议，他会告诉搜索引擎哪些网页可以抓取，哪些不行。当然碰到了之后也需要缓存。
+
+Duplicate documents：很多时候要重复去爬一些网站，看有没有更新。那么对于判断内容是否重复可以计算相似度。相似度可以用k-gram+jaccard similarity来计算，k-gram的集合叫做shringle。当然整个doc很大，那计算量也会很大。所以可以对每个doc生成一个sketch-vector
+
+
+
