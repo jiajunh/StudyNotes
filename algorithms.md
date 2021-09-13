@@ -418,11 +418,295 @@ $L(\mu, \Sigma) = -\log(\prod p(x_i | \mu ,\Sigma)) \\ =-\sum -\displaystyle\fra
 
 
 
-Expectation Step：
+在GMM里面隐藏的变量就是对于每个数据是否属于各个高斯分布，就是0或者1的一个类似于one-hot的向量。其实现在上面的Q就是当前数据处于各个高斯分布的概率分布。
 
-这里定义清楚$z_j$ ，在GMM里面，是几个高斯分布组成立一个大的分布，那么这里就是指数据$x_i$ 是否在第j个高斯分布中。
 
-$p(X,X|\theta) = \prod\prod p(x_i,z_{i1},z_{i2},...|\theta)$
+
+E-step
+
+在E-step中，训练数据和$\theta$ 是已经知道的，需要更新的是在当前条件下每个点属于各个分布的概率值。
+
+也就是说在给定了当前的训练数据和参数，先计算对于每个数据来说是否来自于每一个高斯分布，这里的结果就是他来自于各个高斯分布的概率。按照正常的写法，$E(f(x))$ 现在可以写成
+
+$Q(\theta|\theta_i) = E[log(p(X,Z|\theta))|X,\theta_i]$
+
+需要更新的是：
+
+$\pi_{ij} = p(z_{ij}=1|x_i,\theta_t)=\displaystyle \frac{p(x_i|z_{ij}=1,\theta_t)*p(z_{ij}|\theta_t)}{p(x_i|\theta_t)} \\ =\displaystyle \frac{p(x_i|x_{ij}=1,\theta_t)*\pi_{ij}^{t}}{p(x_i|\theta_t)} = \displaystyle \frac{p(x_i|z_{ij}=1,\theta_t)*\pi_{ij}^{t}}{\sum\limits_{j} \pi_{ij}^t p(x_i|z_{ij}=1,\theta_t)}$
+
+$p(x_i|z_{ij}=1,\theta_t)$ 用高斯分布的共识直接就能求，这样就更新了新的期望值。
+
+
+
+M-step
+
+$\theta^{t+1} = \max \ \ Q(\theta | \theta^t)$
+
+$p(X,Z|\theta) = \prod \prod p(x_i | z=z_j, \theta) p(z=z_j|\theta) = \prod\prod (\pi_j \phi(x_i|...))^{z_{ij}}$
+
+$Q(\theta|\theta_i) = \sum\sum \pi_{ij} log(\pi_j \phi(x | z, \theta))$
+
+
+
+这里有个比较骚的操作，就是在写联合分布的时候，还是likelihood的指数的操作，然后现在有了一个限制条件，就是$\sum\pi_i=1$，就可以用拉格朗日了。。。
+
+$L = -Q(\theta |\theta^t) + \lambda(\sum \pi_i-1)$
+
+正常来说还有一项约束条件就是$\pi>=0$，所以本来应该是要在加一项的，但由于在这里$\pi$ 不可能是一个为0的数，所以所有的系数必定都要=0，所以加了和没加没区别。
+
+然后就要求导了：
+
+$-\sum \pi_{ij} \frac{1}{\pi_j} + \lambda = 0 => \pi_j = \frac{1}{\lambda}\sum_i\pi_{ij}$
+
+然后需要满足限制条件，就能得出$\lambda=\sum\limits_{j}\sum\limits_{i}\pi_{ij}$ 
+
+对GMM来说 $\pi_j$ 就是每个维度的高斯分布的分量，那么总体的分布也就是各个分布的加权和。
+
+然后有了每一个点的分布概率，重新计算$\mu_k, \Sigma_k$
+
+
+
+具体来算一下吧
+
+$\mu_{t+1} = max \ \ \sum\sum\pi_{ij}log(x_i|\mu_t, \Sigma_t) \\ =\sum\sum \log(\prod p(x_i | \mu ,\Sigma)) \\ L = \sum\sum \pi_{ij} (log(-\displaystyle\frac{d}{2}(2\pi)-\displaystyle\frac{1}{2}|\Sigma|-\displaystyle\frac{1}{2}(x_i-\mu)^T\Sigma^{-1}(x_i-\mu)))$
+
+
+
+$\displaystyle \frac{\partial L}{\partial \mu} = \sum\ - \pi_{ij} \Sigma_j^{-1}(x_i-\mu)=0 \\ \mu_{t+1}= \displaystyle \frac{\sum \pi_{ij} x_i}{\sum \pi_{ij}}$
+
+
+
+$\displaystyle \frac{\partial L}{\partial \Sigma} = -\sum \pi_{ij} (\frac{1}{2}\Sigma^{-1}-\frac{1}{2}(x_i-\mu)^T (x_i-\mu)\Sigma^{-2})=0$
+
+$\Sigma_{t+1} = \displaystyle \frac{\sum \pi_{ij} (x_i-\mu)^T(x_i-\mu)}{\sum \pi_{ij}}$
+
+
+
+
+
+## LDA（Linear Discriminant Analysis 和 Latent Dirichlet Allocation）
+
+这两个LDA不是一个东西。。。
+
+这里顺便都整理一遍算了
+
+
+
+### Linear Discriminant Analysis
+
+在这个情况下，一般会一起考虑QDA（Quadratic Discriminant Analysis），这里的LDA和QDA一般适用于分类的情况。
+
+LDA和QDA都是建立在概率模型的基础上，并且基本上是用的multivariant  Gaussian来计算距离。
+
+$p(y=k|x) = \displaystyle \frac{p(x|y=k)*p(y=k)}{p(x)} = \displaystyle \frac{p(x|y=k)*p(y=k)}{\sum p(x|y=y_i)*p(y=y_i)}$
+
+然后一个假设就是每个类别下的数据都是一个多维高斯分布。
+
+$p(x|y=k) = \displaystyle \frac{1}{(2\pi)^{\frac{d}{2}}|\Sigma_k|^{\frac{1}{2}}} exp(-\displaystyle \frac{1}{2} (x-\mu_k)^T \Sigma^{-1} (x-\mu_k))$
+
+$log(p(y=k|x))=log(x|y=k)+log(p(y=k))-log(p(x))$
+
+对于training data确定了以后，$log(p(x))$ 是一个确定值，可以事先计算出来，对于每一类都一样，因此没有比较的意义。
+
+$log(p(y=k|x))=log(x|y=k)+log(p(y=k))+C \\ = \displaystyle -\frac{1}{2}(x-\mu_k)^T\Sigma_k^{-1}(x-\mu_k)-\displaystyle \frac{d}{2}log(2\pi) - \displaystyle \frac{1}{2} log(|\Sigma_k|) + log(p(y=k))+C$
+
+对于每一类来说其他都可以直接计算出来，所以本质上也就是在比较到各个高斯分布的distance。
+
+对于两类来说，直接比较两个的大小就行了
+
+$log(p(y=1|x))-log(p(y=0|x)) = \displaystyle (x-\mu_0)^T\Sigma_k^{-1}(x-\mu_0) \displaystyle -(x-\mu_1)^T\Sigma_k^{-1}(x-\mu_1)+log(p(y=1))-log(p(y=0)) + log(|\Sigma_0|) - log(|\Sigma_1|)$
+
+先把其他直接能算出来的归到一起变成一个常数，然后直接化简。
+
+$log(p(y=1|x))-log(p(y=0|x)) = \displaystyle (x-\mu_0)^T\Sigma_0^{-1}(x-\mu_0) \displaystyle -(x-\mu_1)^T\Sigma_1^{-1}(x-\mu_1) - T$
+
+$=> x^T(\Sigma_0^{-1}-\Sigma_1^{-1})x - 2(\mu_0^T\Sigma_0^{-1}-\mu_1^T\Sigma_1^{-1})x+(\mu_0^T\Sigma_0^{-1}\mu_0-\mu_1\Sigma_1^{-1\mu}\mu_1)-T$
+
+$=> x^T(\Sigma_0^{-1}-\Sigma_1^{-1})x - 2(\mu_0^T\Sigma_0^{-1}-\mu_1^T\Sigma_1^{-1})x + C$
+
+只要判断是不是大于零，就知道属于哪一类
+
+
+
+到这里为止其实都是QDA，毕竟形式也都是二次项，而LDA相较于QDA变动就是简化了方差，LDA假设两类方差是一样的$\Sigma_0=\Sigma_1$
+
+$2(\mu_0^T\Sigma^{-1}-\mu_1^T\Sigma^{-1})x > C$
+
+
+
+
+
+
+
+### Latent Dirichlet Allocation
+
+这个LDA粗略看了一遍就知道很麻烦了
+
+LDA数学上的准备要求很多，没办法硬着来吧
+
+
+
+#### Gamma 函数
+
+其实gamma函数接触过几次了，但都是随便让它过去了。。。现在还是得补。。。不得不说每次都觉得自己要滞后别人一两年真的很难受。
+
+$\Gamma(x) = \displaystyle \int_0^{+\infty} e^{-t}t^{x-1} dt \ \ (x>0)$
+
+Gamma 函数的意义是计算阶乘的一般函数形式。Gamma 函数有一个很重要的性质：
+
+$\Gamma(x+1) = \displaystyle \int_0^{+\infty} e^{-t} t^x dt = -e^{-t}t^x\displaystyle|_0^{+\infty} + x\displaystyle \int_0^{+\infty} e^{-t}t^{x-1} dt = x\Gamma(x)$
+
+
+
+#### 二项分布
+
+随机变量$X - Burnulli(n, p)$
+
+$p(K=k) = \left (\begin{matrix}n \\ k  \end{matrix}\right) p^{k} (1-p)^{1-p}$
+
+
+
+#### 多项式分布
+
+多项式的话，就对应有多个类，然后每个类都有自己的选中几率，从里面选到第$i$类$x_i$ 个
+
+$p(x_1,x_2,...x_k,n,p_1,p_2...p_k) = \displaystyle \frac{n!}{x_1! x_2!...x_k!}p_1^{x_1}....p_k^{x_k}$
+
+当然这里一大堆阶乘，可以用Gamma函数来表示
+
+
+
+#### Beta 分布
+
+beta分布是定义在（0，1）中的一个连续的分布，先给出pdf
+
+$f(x| \alpha,\beta) = \displaystyle \frac{x^{\alpha-1}(1-x)^{\beta-1}}{\displaystyle \int_0^1u^{\alpha-1}(1-u)^{\beta-1}du}$
+
+这里其实最关键的点就是化简分母那一部分，因为分布函数是0-1的所以相当于0-+inf，>=1 的部分都为0。
+
+$\displaystyle \int_0^1u^{\alpha-1}(1-u)^{\beta-1} du = u^{\alpha-1} \displaystyle \frac{(1-u)^\beta}{\beta} \bigg|_0^1+ \displaystyle \int_0^1 \displaystyle \frac{\alpha-1}{\beta} u^{\alpha-2}(1-u)^{\beta} du = \displaystyle \frac{\alpha-1}{\beta} \displaystyle \int_0^1 u^{\alpha-2}(1-u)^{\beta} du$
+
+然后发现这又是一个相同形式的东西，所以可以疯狂写下去。。。先用$f(\alpha, \beta)$ 来表示。
+
+$f(\alpha,\beta) =  \displaystyle \frac{\alpha-1}{\beta} f(\alpha-1, \beta+1) \\ =\displaystyle \frac{(\alpha-1)(\alpha-2)...1}{\beta(\beta+1)...(\beta+\alpha-2)} f(0, \beta+\alpha)$
+
+$f(0, \alpha+\beta) = \displaystyle \int_0^1 (1-u)^{\alpha+\beta-1} du = -\displaystyle \frac{(1-u)^{\alpha+\beta-1}}{\alpha+\beta-1} \bigg|_0^1 = \displaystyle \frac{1}{\alpha+\beta-1}$
+
+$=>f(\alpha,\beta) = \displaystyle \frac{1...(\alpha-1)}{\beta...(\beta+\alpha-1)} = \displaystyle \frac{1...(\alpha-1) 1...(\beta-1)}{1...(\alpha+\beta-1)} = \displaystyle \frac{\Gamma(\alpha)\Gamma(\beta)}{\Gamma(\alpha+\beta)}$
+
+
+
+$f(x| \alpha, \beta) = \displaystyle \frac{\Gamma(\alpha+\beta)}{\Gamma(\alpha)+\Gamma(\beta)}x^{\alpha-1}(1-x)^{\beta-1}$
+
+
+
+这里还是要定义一下一个函数$B(\alpha,\beta) =\displaystyle \frac{\Gamma(\alpha+\beta)}{\Gamma(\alpha)+\Gamma(\beta)}$
+
+
+
+到这里用阶乘的定义联系上了Gamma函数，然后把这样一个分布叫做beta分布。。。Beta分布中最重要的就是$\alpha, \beta$这两个参数，算一下期望就会发现$E(x,\alpha,\beta) = \displaystyle\frac{\alpha}{\alpha+\beta}$。
+
+
+
+
+
+#### Dirichlet 分布
+
+Dirichlet分布可以看作是多项式分布和beta分布的一个结合，pdf为
+
+$f(x_1,x_2,..x_k|\alpha_1,\alpha_2,...\alpha_k) = \displaystyle \frac{1}{B(\alpha)}  \prod x_i^{\alpha_i-1}$
+
+$\sum x_i = 1$
+
+$B(\alpha) = \displaystyle \frac{\prod\Gamma(\alpha_i)}{\Gamma (\sum\alpha)_i}$
+
+同样这种形式可以直接参考多项式的期望，写出$E(x) = [\displaystyle\frac{\alpha_1}{\sum \alpha_i}, ....]$
+
+
+
+
+
+#### Gibbs Sampling
+
+一种MCMC采样方法，适用于条件概率比边缘概率更好计算的场景。
+
+
+
+
+
+#### LDA..(part 1)
+
+前面那些东西单拿出来证明一下，倒也都还好说。。
+
+LDA是对单个单词来说的，认为词之间，文档之间都是相互独立的，并且不考虑word之间的顺序关系。所以生成一个语料库的概率就是所有词概率相乘，也就是likilihood的这种写法。这种写法就是认为每一个词出现的频率就是一个定值，只不过我们可能需要统计什么的来计算
+
+$p(w) = \prod p_{w_i}^{n_i}$
+
+当然也有另外一种看法，就是认为词的概率满足一个概率分布，在LDA中用的就是dirichilet 分布，当然超参数就是每个词的$\alpha$，他计算的就是每个词的联合概率分布。这具体来说就像是从所有文档中重复抽取M个document，每个document选取N的词，这样生成了整个语料库。这样来看的话每个词的频率就会满足一定的概率分布，是一个随机变量，而不是一个固定值。
+
+$Dir(p|\alpha) = \displaystyle \frac{1}{\Delta(\alpha)} \prod p_k^{\alpha_k-1}$
+
+因为需要满足积分为1，$\Delta(\alpha_i) = \displaystyle \int\prod p_k^{\alpha_k-1} dp$
+
+这里因为Dirichlet 和多项式分布形式上是一样的，所以可以把两者结合，结合之后新的概率分布就又有词频率项又有超参的调节项。同样也可以认为$\alpha$ 是选到一个词袋的概率，$n$ 就是词的频率。
+
+$Dir(p|\alpha, \hat{n}) = \displaystyle \frac{1}{\Delta(\alpha+\hat{n})} \prod p_k^{\hat{n}+\alpha_k-1}$
+
+$E(p)=[\displaystyle \frac{\alpha_1+n_1}{\sum \alpha_i+n_i}, ...]$
+
+那么对于整个语料库来说，给定$\alpha$ 生成一个语料库W的概率为：
+
+$p(W|\alpha) = \displaystyle \int p(W|p)*p(\bar{p}|\alpha) d\bar{p} = \displaystyle \int \prod p_i^{n_i} \displaystyle \frac{1}{\Delta(\alpha)}p_i^{\alpha_i-1} dp \\ = \displaystyle \frac{1}{\Delta(\alpha)} \displaystyle \int \prod p_i^{n_i+\alpha_i-1}dp = \displaystyle \frac{\Delta(n+\alpha)}{\Delta(\alpha)}$
+
+
+
+
+
+####pLSA (Probabilistic Latent Semantic Analysis)
+
+LSA基本使用了SVD的思路来踢去核心的概念，从SVD的角度来说同义词这种多词对一概念是可以被处理的，因为SVD是降维提取核心思想的方法，但一词多义就很难体现。所以在pLSA中引入了一个topic的latent variable。
+
+pLSA中认为doc-topic满足一种分布，也就是说每个document对应着各种topic的概率，另外topic-word也满足一种分布，在每个topic中词向量都有对应的概率。所以pLSA认为一篇document的构建过程是先随机选择出一个topic，然后从这个topic中选取一个单词。对于pLSA中依然是用的是词袋模型，doc之间，word之间是相互独立的。
+
+assume给定一个document，总共有K个topic，然后要生成一个n个词的document
+
+$p(\hat{w}|d_m) = \prod_{i=1}^n \sum_{j=1}^k p(w_i|t_j)*p(t_j|d_m)$
+
+
+
+
+
+#### LDA (part 2)
+
+那么现在来看LDA和pLSA，两者其实还是很相似的，首先都是以某个先验概率选择一篇document，并且都设有latent variable，只不过在pLSA中是一个topic，并且是直接由doc-topic，topic-word来生成的。而在LDA中可以看作topic是和dirichlet distribution相关的东西。LDA是把这两个分布都用Dirichlet 和多项式分布来处理。
+
+<img src="/Users/jiajunh/Library/Application Support/typora-user-images/image-20210913164057602.png" alt="image-20210913164057602" style="zoom:20%;" />
+
+
+
+从这里就可以看出doc-topic，topic-word用了两个Dirichlet，多项式分布来处理。
+
+$\alpha$  这边表示的是在生成第m篇document的时候，从一个Dirichlet+多项式分布中生成了这个词对应的topic的概率分布
+
+$\beta$  这边表示的是在生成topic-word的时候，从一个Dirichlet+多项式分布中生成了这个词对应的概率分布。
+
+因为每个词都是独立的，所以对于生成一篇document来说，一共需要采样2N次，每个词需要采样一个topic，一个word，然后他们可以交换顺序，可以先采样完所有的topic，再采样所有的word。
+
+$p(topic|d_m) = \displaystyle \int \prod p(topic|\bar{p_1})*p(\bar{p_1}|\alpha) d\bar p = \displaystyle \frac{\Delta(\alpha+k)}{\Delta(\alpha)}$
+
+$p(word|topic) = \displaystyle \int \prod p(word|\bar{p_2})*p(\bar{p_2}|\beta) d\bar p = \displaystyle \frac{\Delta(\beta+n)}{\Delta(\beta)}$
+
+$p(\bar{w},\bar{t} | \alpha,\beta)=\displaystyle\prod \displaystyle\frac{\Delta(\alpha+k)}{\Delta(\alpha)} \prod \displaystyle \frac{\Delta(\beta+n)}{\Delta(\beta)}$  
+
+这里的$\alpha, \beta, k, n$全是向量，是超参向量，和给定的document的中集合中topic / word的分布情况。
+
+
+
+
+
+现在我们来采样
+
+首先在所有document中选定M个作为语料库，topic一共有K个，每篇document有N个word，还用了$i=(m,n)$ 来表示第m篇document中第n个词。$\theta_m$ 是一个document m 的topic分布，$\phi_k$ 是topic k 的word 分布。
 
 
 
