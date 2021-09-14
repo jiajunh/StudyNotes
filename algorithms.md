@@ -630,6 +630,10 @@ $B(\alpha) = \displaystyle \frac{\prod\Gamma(\alpha_i)}{\Gamma (\sum\alpha)_i}$
 
 一种MCMC采样方法，适用于条件概率比边缘概率更好计算的场景。
 
+对于一个vector来说，每一次采样只更新一个值，是根据所有除当前值以外的所有数据的条件概率
+
+$p(x_i|x_1,x_2,...,x_{i-1}, x_{i+1}, ..., x_n)$
+
 
 
 
@@ -706,7 +710,51 @@ $p(\bar{w},\bar{t} | \alpha,\beta)=\displaystyle\prod \displaystyle\frac{\Delta(
 
 现在我们来采样
 
-首先在所有document中选定M个作为语料库，topic一共有K个，每篇document有N个word，还用了$i=(m,n)$ 来表示第m篇document中第n个词。$\theta_m$ 是一个document m 的topic分布，$\phi_k$ 是topic k 的word 分布。
+首先在所有document中选定M个作为语料库，topic一共有K个，每篇document有N个word，还用了$i=(m,n)$ 来表示第m篇document中第n个词。$\theta_m$ 是一个document m 的topic分布，$\phi_k$ 是topic k 的word 分布。$\vec{w},\vec{z}$ 分别是docment的单词向量和topic向量。$\vec{n_m}$根据topic分布$\theta$ 得出的是document m下每个topic对应的词的数量。$\vec{n_k}$是每一个topic下每个word出现的次数。
 
 
+
+在这个问题上来说，最重要的就是生成一篇document的联合概率$p(\vec{w},\vec{z}|\alpha,\beta)$，我们给定的只有超参。
+
+$p(\vec{w},\vec{z}|\alpha,\beta)=p(\vec{w}|\vec{z},\beta)*p(\vec{z}|\alpha)=\displaystyle\prod \displaystyle\frac{\Delta(\alpha+\vec{n_m})}{\Delta(\alpha)} \prod \displaystyle \frac{\Delta(\beta+\vec{n_k})}{\Delta(\beta)}$
+
+要是用Gibbs Sampling，那么就是对两个向量$\vec{w}, \vec{z}$的每一个元素迭代进行条件概率采样。
+
+
+
+先对$\vec{z}$ 采样
+
+$p(\vec{z_i}=k|\vec{z_{\neg i}},\vec{w}) = \displaystyle \frac{p(\vec{w}, \vec{z})}{p(\vec{w},\vec{z_{\neg_i}})} = \displaystyle \frac{p(\vec{w}, \vec{z})}{p(w_i=t, \vec{w_{\neg i}},\vec{z_{\neg_i}})} = \displaystyle \frac{p(\vec{w}, \vec{z})}{p(\vec{w_{\neg i}},\vec{z_{\neg_i}}|w_i=t)*p(w_i=t)} \\ \varpropto \displaystyle \frac{p(\vec{w}, \vec{z})}{p(\vec{w_{\neg i}},\vec{z_{\neg_i}})} = \displaystyle \frac {\displaystyle\prod \displaystyle\frac{\Delta(\alpha+\vec{n_m})}{\Delta(\alpha)} \prod \displaystyle \frac{\Delta(\beta+\vec{n_k})}{\Delta(\beta)}} {\displaystyle\prod \displaystyle\frac{\Delta(\alpha+\vec{n_{m,\neg i})}}{\Delta(\alpha)} \prod \displaystyle \frac{\Delta(\beta+\vec{n_{k,\neg i})}}{\Delta(\beta)}} \\ =\displaystyle \frac{\Delta(\alpha+\vec{n_m})}{\Delta(\alpha+\vec{n_{m,\neg{i}}})} \displaystyle \frac{\Delta(\beta+\vec{n_k})}{\Delta(\beta+\vec{n_{k,\neg{i}})}}$
+
+
+
+这里需要计算把当前位置的单词去掉以后的每个单词在topic和该document中的数量，也就是当前单词对应topic的位置-1，对应document位置-1。
+
+$p(\vec{z_i}=k | \vec{z_{\neg i}}, \vec{w}) \varpropto \displaystyle \frac{\Delta(\alpha+\vec{n_m})}{\Delta(\alpha+\vec{n_{m,\neg{i}}})} \displaystyle \frac{\Delta(\beta+\vec{n_k})}{\Delta(\beta+\vec{n_{k,\neg{i}})}}$
+
+$\displaystyle \frac{\Delta(\alpha+\vec{n_m})}{\Delta(\alpha+\vec{n_{m,\neg{i}}})} = \displaystyle \frac{\prod \Gamma(\alpha_k+n_k)}{\Gamma(\sum(\alpha_k+n_k))} * \displaystyle \frac{\Gamma(\sum \alpha_k+n_{k,\neg i})}{\prod \Gamma(\alpha_k+n_{k,\neg i})} = \displaystyle \frac{\Gamma(\alpha_i+n_i)}{\Gamma(\alpha_i+n_{i}-1)} * \displaystyle \frac{\Gamma(\sum(\alpha_k+n_k))}{\Gamma(\sum(\alpha_k+n_{k,\neg{i}}))}$
+
+$\displaystyle \frac{\Delta(\beta+\vec{n_m})}{\Delta(\beta+\vec{n_{m,\neg{i}}})} = \displaystyle \frac{\prod \Gamma(\beta_i+n_t)}{\Gamma(\sum(\beta_i+n_t))} * \displaystyle \frac{\Gamma(\sum \beta_i+n_{t,\neg i})}{\prod \Gamma(\beta_i+n_{t,\neg i})} = \displaystyle \frac{\Gamma(\beta_i+n_i)}{\Gamma(\beta_i+n_{i}-1)} * \displaystyle \frac{\Gamma(\sum(\beta_t+n_t))}{\Gamma(\sum(\beta_t+n_{t,\neg{i}}))}$
+
+因为Gamma函数就是阶乘，所以可以化简
+
+$\displaystyle \frac{\Gamma(\alpha_i+n_i)}{\Gamma(\alpha_i+n_{i}-1)} = \alpha_i+n_i-1$
+
+$\displaystyle \frac{\Gamma(\beta_k+n_k)}{\Gamma(\beta_k+n_{k}-1)} = \beta_k+n_k-1$
+
+$\displaystyle \frac{\Gamma(\sum(\alpha_k+n_k))}{\Gamma(\sum(\alpha_k+n_{k,\neg{i}}))} = \sum(\alpha_k+n_{k,\neg{i}})$
+
+$\displaystyle \frac{\Gamma(\sum(\beta_t+n_t))}{\Gamma(\sum(\beta_t+n_{t,\neg{i}}))} = \sum(\beta_t+n_{t,\neg{i}})$
+
+
+
+$p(\vec{z_i}=k|\vec{z_{\neg i}},\vec{w}) = \displaystyle \frac{p(\vec{w}, \vec{z})}{p(\vec{w},\vec{z_{\neg_i}})} \varpropto \displaystyle \frac{\alpha_k+n_{m,\neg{i}}^{(k)}-1}{\sum_k (\alpha_k + n_{m,\neg{i}}^k)} * \displaystyle \frac{\beta_t+n_{k,\neg{i}}^{(t)}-1}{\sum_t (\beta_t + n_{k,\neg{i}}^t)}$
+
+这里就利用了Gamma函数的性质，得到了一个不含Gamma函数的表达式。当$\alpha,\beta$ 都去相同的值的时候可以进一步改进表达式，这样子每一步采样的更新都只剩下给定了的两个超参数，以及每个词在document 和 topic下的词频。
+
+当迭代完之后，就可以计算两个矩阵doc-topic，topic-word，LDA每一次迭代只是在更新每个词的所属topic。
+
+有一个判断迭代的参数perplexity，
+
+$p = b^{H(q)}=b^{-\sum log_b(q(x_i))}$
 
