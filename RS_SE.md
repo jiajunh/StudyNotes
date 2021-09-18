@@ -18,6 +18,12 @@ RSV：Retrieval Status Value，算是一个重要的指标
 
 
 
+CTR：Click Through Rate
+
+CVR：Click Value Rate
+
+
+
 结果指标：
 
 Precision：$precision = \frac{TP}{TP+FP}$ = (选中结果中正确的) / (所有选中的结果)
@@ -559,7 +565,9 @@ skip-gram 还会有一些采样，根据词出现的频率来采样。
 
 ##### Hierarchical softmax 
 
-主要就是把原来的hidden->output的网络用一种新的haffman tree的softmax来替代了。它是一个二叉树的结构，它每个节点都是一套参数加上一个sigmoid，用来分类，到leaf就对应到了单词。
+主要就是把原来的hidden->output的网络用一种新的huffman tree的softmax来替代了。它是一个二叉树的结构，它每个节点都是一套参数加上一个sigmoid，用来分类，到leaf就对应到了单词。
+
+其实本质上来说，每一个词都是一个节点，事先可以先把所有词通过0-1编码先对应到整棵树上。在这棵树上，每个节点都会进行一次soimoid分类，计算出来的就是走路线的概率。然后按照这条路线一直往下直到对应的词，就可以用likelihood把loss优化了。当然要注意的是，每个节点都是用输出的vector和各自的weight来计算的，并不是nn连乘下来的关系。
 
 
 
@@ -679,7 +687,7 @@ $aP = a $ => a就是left eigen vector
 
 
 
-#### **Hubs and Authorities** / Hyperlink-Induced Topic Search (HITS)
+#### Hubs and Authorities / Hyperlink-Induced Topic Search (HITS)
 
 这两个东西是两种score，就是原来把一个page只打一个score，先在分成两个hub score 和 authority score。这么做主要是由于在搜索的时候，可以把一个网页认为有两个主要的部分，尤其是*broad-topic searches*。那么经常就是我做这种搜索期望的是由专业人员，专业机构提供的信息，这样的网页就被称为是authoritive。当然也有会把这些信息汇总起来的那种网页，就叫hub page，hub page往往会指向authoritive pages。所以好的authoritive page 往往也是被很多hub pages指向。
 
@@ -709,7 +717,7 @@ $h = \frac{1}{\lambda}AA^Th, \ \ \ a=\frac{1}{\lambda}A^TAa$
 
 
 
-### **Crawling and near-duplicate pages**
+### Crawling and near-duplicate pages
 
 爬虫要爬数据问题还挺多的，首先肯定是必须要分布式，不然效率太低。然后要排查掉恶意网站，和去重，并且不要给一个服务器很大的压力。
 
@@ -727,3 +735,173 @@ Duplicate documents：很多时候要重复去爬一些网站，看有没有更�
 
 
 
+
+
+
+
+
+
+##Recommendation System (RS)
+
+传统的推荐系统可以主要分为两种
+
+1. Content-based systems：这种方法主要以item的属性，相关性为主
+2. Collaborative filtering：这种方法会主要比较user-item的相关性。
+3. Latent factor based：
+
+RS中最重要的两个东西就是item和user，这两个属性建立出来的matrix叫做Utility Matrix，每一个值都表示了user-item pair的degree。这个矩阵肯定是一个很大很稀疏的矩阵。在这个基础上建立的RS目标就是要填补上边的空缺，并且只需要填写一部分就行了。
+
+Utility Matrix的核心问题：
+
+1. 收集信息：打分，满意度之类的，
+2. 从已知的pair去估计未知的pair，还有一个问题就是new item/user 会有cold start的问题，因为没有任何可以推断的数据。
+
+
+
+### Content-based Recommendations
+
+Item Profile：既然content-base 是依靠item之间的相关度来选择推荐内容的，那么就应该对每一个item构建一个profile，也就是每个item构建一个特征向量。
+
+当然还需要构建user profile，最简单的就是对utility matrix中user-item pair中不为0的pair，可以按照feature 对每个item先进行加权平均，得到的就是user profile，然后利用cosine similarity来计算user-item的相似度。
+
+content-base 他好就好在没有item冷启动的问题，只要来的item能够构建出feature，就能直接计算相关度，他对于用户数据的依赖仅仅限于用户自己，并不会要求有别人的数据。并且也正因此，这种方法推荐出来的东西都是针对每个用户的。当然认为的特征构建就是一个很难的事情，并且对于新用户来说没法推荐，因为没有相关历史数据（虽然个人还是认为用户冷启动就不是一个很关键的问题，如果真的要一开始就要你强推一些东西，那他用你干什么）。
+
+
+
+
+
+### Collaborative Filtering
+
+所谓的协同过滤也就是把utility matrix换个方向来看，content-base主要是关注item 的vector的相关性，而CF是关注相近的用户之间的行为，通过相似的用户来推荐。当然CF分user-user 和 item-item，主要核心思想是通过和其他人的比较。
+
+
+
+如果最简单的把utility matrix的user行作为vector，那么Jaccard，cosine，Pearson correlation coefficient就很容易计算。那么先找到了K个相近的用户之后，给其他item的评价就是其他所有users 的平均值，或者说根据相关度的加权。
+
+对于item-item CF，本质一样的，只不过把user vector变成item vector，找出相近的之后也是加权平均。
+
+对于实际情况来说item-item相对来说特征是固定的，而user-user，user的喜好会随时间变化。
+
+
+
+当然CF的优点就是可以没有feature，但肯定处理不了cold start的问题，要在相近的范围内进行推荐首先要求有一定的数据量存在。并且这回更容易推荐热门。
+
+
+
+### Hybrid
+
+单纯的CF，CB是在是太容易能看出问题了，一眼就能看出来怎么改进，最简单的就是把feature 引进到CF里面，那么计算相似度就更合理了。至少说new item的问题可以解决了。当然也可以先聚类。
+
+
+
+
+
+### Latent Factor Models
+
+SVD
+
+对于每一个utility matrix中的pair可以认为是两个向量的点积，对于每一个item/user来说可以认为有latent vector，构成两个矩阵，其实本质上来说就是不太能解释的features，这其实和SVD的思路上就很契合。
+
+现在utility matrix是item-user matrix A，那么item-matrix就是U，user-matrix是$\Sigma V$ 
+
+写成loss function
+
+$\min\limits_{P,Q} \ \sum(r_i-q_i^Tp_x)^2 + (\lambda_i\sum||p_i||^2 + \lambda_2 \sum ||q_x||^2)$
+
+然后就可以SGD 迭代优化P，Q
+
+当然实验表明不直接预测rating值，而是通过把它变成均值加上一个diff的形式形成学习残差的结构，效果可能会更好。当然，除了global的均值，还可以设定一个item偏置，user偏置，这样更加合理
+
+$\hat{r_{ix}} = \mu + b_i + b_x + q_i^Tp_x$
+
+
+
+在SVD的基础上，用户对于很多item有除了评分之外的交互行为。这里面还有相当大量的信息。
+
+$\hat{r_{ix}} = \mu + b_i + b_x + q_i^Tp_x + q_i^T(p_x+|N(i)|^{-\frac{1}{2}}\sum y_j)$
+
+$SSE = \sum(r_i-q_i^Tp_x)^2 + \lambda(\sum||p_i||^2 + \sum ||q_x||^2 + \sum||b_i||^2 + \sum||b_x||^2 + \sum ||y_j||^2)$
+
+这个就是SVD++的形式了，SVD++的核心就在于把那些交互隐藏的信息同样变成一个vector
+
+
+
+其实SVD的思想就是MF（Matrix Factorization），把整个大矩阵分解成User矩阵和Item矩阵，转化为一个个内积的形式。
+
+但是注定MF系列的算法应用是很困难的，尤其是在确定latent vector的时候。
+
+
+
+
+
+
+
+### 各种算法
+
+#### FM系列
+
+#####FM（Factorization Machine）
+
+一般来说对于广告，推荐系统，会手工构建很多特征，之后最简单的就是用LR，GBDT这些来后续处理。但很多时候直接的特征并不够相关，而一些特征之间的组合能够造出更加强相关性的特征。FM就是为了解决在数据稀疏的时候，特征组合的问题。一般来说，最常见的情况就是CTR预测，CTR的特征都比较稀疏。。。
+
+
+
+很多时候很多特征都是onehot编码的，这么一来数据就会有稀疏性。而构建融合特征的时候，最容易想到的就是二阶特征，因为多阶特征构造的时候数量是呈指数型上升的，往往二阶特征就能够表达足够的信息。并且如果存在稀疏性的话，二阶特征同样也具有稀疏性，因为只有当两个特征上的值都为1的时候，二阶特征才为1。
+
+原始特征为$x_i$
+
+$y(X)=w_0+\sum w_i x_i + \sum\sum w_{i,j}x_i x_j$
+
+既然二阶特征数量又多，又特别稀疏，那么如果直接拿来训练，很可能有些特征上的权值会因为数据不充分，而使结果不够好。同样也可以注意到，二阶特征一共有$\displaystyle \frac{n(n-1)}{2}$ ，如果先考虑了顺序的情况下，就可以直接写成一个对称矩阵。而且我们是需要尽可能把参数的数量降下来，那么很自然就可以想到kernel。我们同样可以对这个W矩阵按照矩阵分解的方法每个元素$w_{i,j}=v_i^T v_j = <v_i,v_j>$ 
+
+这样完全就是kernel了，并且参数直接从$\displaystyle \frac{n(n-1)}{2}$减少到O(n)个参数，只不过这里v像kernel一样，也是一个latent vector。
+
+$\sum\sum w_{i,j}x_ix_j => \displaystyle\frac{1}{2} \sum\sum<v_i, v_j> x_i x_j - \displaystyle \frac{1}{2} \sum <v_i,v_i>x_ix_i \\ = \displaystyle\frac{1}{2} ((\sum v_i x_i)^2-\sum v_i^2 x_i^2)$
+
+
+
+这一部分直接求导：
+
+$\displaystyle \frac{\partial }{\partial v_i} = (\sum\limits_{j} v_i x_i x_j) -  v_ix_ix_i$
+
+
+
+##### FFM （Field-aware Factorization Machine）
+
+FFM就是一个进阶版的FM。FM中每一个feature只对应了一个latent vector，在FFM中分的更加细，FFM给所有的特征加了一个field属性，并且不同field中的特征融合带来的影响应该不一样。所以FFM对于每一个feature 要有一些相对应的fields。然后假设feature $j_1, j_2$ 对用的fields分别为$f_1, f_2$
+
+$\phi_{ffm} = \sum\sum (w_{i,f_j}w_{j,f_i})x_1 x_2$
+
+FFM采用的pair是对应的另一个的field向量。整体来说我觉得FFM是一种FM和原始的latent vector的一种权衡，本质上加入field就是对于特征数量的调节，现在加入fields属性后特征数量就*f，也就是原来的一个feature 对应一个latent vector，现在对应k个不同的vector。
+
+
+
+
+
+##### Wide & Deep
+
+这个东西基本上就是一个小融合，我们首先知道数据基本上是one-hot编码过的，并且可以通过两两融合特征来进一步构建更大规模的特征库。然后对于这些特征LR，GBDT。。。之类的操作，这样基本就是一个wide model了
+
+然后Deep说白洁就是那种带embedding的NN结构。。。
+
+所以本质上wide & deep就是纯粹把这两个东西做了一个ensemble。。。是在时没什么新意啊。所以这个东西就是融合了一下之后能够一定程度上避免一些负面效果。
+
+
+
+
+
+##### DeepFM
+
+deepFM其实可以看错是一种wide & deep的变种实现。他的wide部分就是FM出来的东西，当然他的latent vector可以是直接用embedding的结果来表示。当然可以顺便用FFM给特征增加一点fields。他的deep部分就是直接拿embedding的结果在加上一些NN层。最后把两边的结果融合起来。
+
+本质上来说也没什么好讲的，和wide&deep一样是很容易想到的思路。
+
+本质上引入deepNN就是为了减少计算量，对于稀疏的特征，最容易的方法就是embedding。
+
+
+
+
+
+####CRF(Conditional Random Field)
+
+CRF一般适用于序列标注的算法，conditional指的是条件概率，random指的是随机变量。CRF和HMM是很相近的，。

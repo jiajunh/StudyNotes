@@ -758,3 +758,61 @@ $p(\vec{z_i}=k|\vec{z_{\neg i}},\vec{w}) = \displaystyle \frac{p(\vec{w}, \vec{z
 
 $p = b^{H(q)}=b^{-\sum log_b(q(x_i))}$
 
+
+
+
+
+
+
+##Hidden Markov Model（HMM）
+
+Markov Model：就是当前的状态至于上一个时间点的状态有关。对于每个状态都是可以被观察到的情况下，可以被称作为是Visible Markov Model。当然一般做题什么的都是可观测的状态，所以之前大部分情况都是visible MM。而HMM本质上来说状态可以是一个latent variable，不一定能直接被观测，但是可以通过一些其他的变量来推断。
+
+在HMM中状态序列不是一个可以直接获得的变量，但是我们可以知道状态之间的转换关系，也就是Transition Matrix，而每一个状态，可以通过一些可观测的变量来表示。所以在hidden states 和 observation之间有一个概率分布的关系B，而transition matrix可以用A来表示，$\pi$ 表示初始状态的概率分布，一般HMM可以表示为 $\lambda = [\pi, A, B]$，对比普通的VMM，HMM只是多了一个观测状态的概率分布。
+
+
+
+HMM一般可以用来，评估接下来的时间某个状态的概率，也就是预测评估，猜测hidden state，相当于是一个做一次decoder。
+
+先做一些设置：
+
+$\lambda = (\pi, A, B)$
+
+$Q = \{q_1, q_2, ...,q_N\}$ ，Q表示所有的状态集合
+
+$V = \{v_1, v_2, ...,v_M\}$ ，V表示所有的观测集合
+
+$a_{ij} = P(i_{t+1}=q_j|i_t=q_i)$
+
+$b_i(k) = P(o_t = v_k | i_t=q_t)$
+
+
+
+很明显，直接去把所有情况都计算一遍来计算$P(O|\lambda)$ 是一件很离谱的事情，需要对整个时间序列上所有的状态变化都遍历一遍。
+
+$P(O|\lambda) = \sum \pi_{i1}b_{i1}(o_1)a_{i1,i2}.....$
+
+前向算法：
+
+$\alpha_1(i) = \pi_i b_i(o_i)$
+
+$\alpha_{t+1} = b_i(o_{t+1}) \sum \alpha_t(j) a_{ji} $
+
+$P(O|\lambda) = \sum \alpha_T(i)$
+
+
+
+后向算法：
+
+$\beta_T(i) = 1$
+
+$\beta_t(i)=\sum a_{ij} b_j(o_{t+1}) \beta_{t+1}$
+
+$P(O|\lambda)=\sum \pi_i b_i(o_1)\beta(i)$
+
+
+
+前向算法就是利用了Markov Chain的特点，每一次迭代都只和上一个的状态有关，所以不用把所有path逐一计算。
+
+
+

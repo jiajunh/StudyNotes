@@ -8,7 +8,7 @@
 
 对于一系列Nodes，需要找到一个MST，按照edge的cost排序，如果当前的edge两边的node没有连通，添加edge 进graph，否则继续下一个。判断又没有连通，用union set。
 
-```
+```C++
 algorithm Kruskal(G) is
     F:= ∅
     for each v ∈ G.V do
@@ -127,6 +127,42 @@ vector<int> ReservoirSampling(vector<int>& results, vector<int>& nums, int k)
     }
 
     return results;
+}
+```
+
+
+
+
+
+### 查找算法
+
+#### 字典树Trie
+
+一般来说Trie要有insert和search的功能，delete什么的可能并不是必要的。这里写一个小模板
+
+```C++
+class TrieNode {
+public:
+  bool isLeaf;
+  TrieNode* children[26];
+  
+  TrieNode() {
+    this->isLeaf = false;
+    for (int i=0; i<26; i++) {
+      this->children[i] = nullptr;
+    }
+  }
+  
+  void insert(const string& key) {
+    TrieNode* curr = this;
+    for (int i = 0; i<key.size(); i++) {
+        if (curr->children[key[i]] == nullptr) {
+            curr->children[key[i]] = new Trie();
+        }
+        curr = curr->children[key[i]];
+    } 
+    curr->isLeaf = true;
+  }
 }
 ```
 
